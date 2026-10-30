@@ -15,10 +15,11 @@ Lập ngày 29/10/2026. Làm tại nhà, 3 tháng, **chỉ có một máy tính,
 | 2 | Bộ thu chạy liên tục, lưu Parquet, đẩy S3 | ✅ máy (Task Scheduler) + **AWS Lambda 24/7 lên S3** (làm sớm, thay "tuần 9"); km/h từ 30/10 04:11. ⏳ mốc "72 giờ liền" (từ 29/10 18:57) |
 | 3 | Ghép TomTom + sự cố vào cạnh | ✅ 95,8% mẫu; sự cố 97%; bộ ghép numpy 0,7 s/lần chụp. ⬜ kiểm tay 30 đoạn |
 | 4 | 3 mức kẹt, thời tiết + sự cố theo cạnh, điểm ngập, bảng huấn luyện, EDA | ✅ tầng bạc/vàng, D8 (30 điểm ngập), M1, M2, tốc độ thật. ⏳ EDA theo thứ / khi mưa (cần thêm ngày) |
-| 5 | Baseline lịch sử + LightGBM, chia theo thời gian, METR-LA | ✅ đường ống + mốc giữ nguyên. ⏳ baseline lịch sử + đánh giá thật (cần ≥ 7–14 ngày). ⬜ METR-LA |
-| 6 | LSTM/GRU, ablation | ⬜ |
-| 7 | Định tuyến theo thời điểm, 3 phương án | ✅ 30/10: 3 phương án theo giờ xe tới cạnh, cấm đường đóng, phạt ngập khi mưa, ALT; kiem_tra_tuan7 ĐẠT (< 2 s, 0 lỗi luật, 8h nhanh hơn ngắn nhất 17,8%). ⬜ tuyến thay thế, phạt rẽ trái |
-| 8–13 | API + web, AWS phục vụ, đánh giá, chạy thử ảo, báo cáo | ⬜ (bảng theo dõi 2 bộ thu đã có: `he_thong/bang_theo_doi/`) |
+| 5 | Baseline lịch sử + LightGBM, chia theo thời gian, METR-LA | ✅ đường ống + mốc giữ nguyên. ✅ METR-LA/PEMS-BAY (QĐ-014): HA của mình 4,15 / 2,88 MAE = bài báo 4,16 / 2,88; đồ thị 1.515 / 2.369 cạnh = công bố. ⏳ baseline lịch sử + đánh giá thật TP.HCM (cần ≥ 7–14 ngày) |
+| 6 | LSTM/GRU, ablation | 🔶 `mo_hinh/hoc_sau.py` (QĐ-014) trên METR-LA: **Graph WaveNet 2,69 / 3,06 / 3,48 MAE = bài báo 2,69 / 3,07 / 3,53**; GRU 3,00 / 3,61 / 4,48 (thông tin không gian giảm MAE 10–22%). ✅ đường ống TP.HCM `hoc_sau_hcm.py` (QĐ-015): lần đầu (1,5 ngày) GWN 7,46 / 9,14 / 10,77 vs GBM 7,59 / 9,36 / 10,53 điểm % — chưa kết luận. ⏳ chạy lại khi ≥ 7–14 ngày; ablation sự cố / thời tiết |
+| 7 | Định tuyến theo thời điểm, 3 phương án | ✅ 30/10: 3 phương án theo giờ xe tới cạnh, cấm đường đóng, phạt ngập khi mưa, ALT; kiem_tra_tuan7 ĐẠT (< 2 s, 0 lỗi luật, 8h nhanh hơn ngắn nhất 17,8%). ✅ 31/10 (QĐ-016): tìm theo cạnh + ALT theo cửa sổ giờ (chậm nhất 1,23 s), phạt rẽ trái qua trục lớn 30 s (rẽ trái 3,41 → 1,95/chuyến; có lợi khi trễ rẽ thật > ~10 s; chỉ tính thời gian chạy vẫn ĐẠT 84%), tuyến thay thế (≥ 2 tuyến ở 99% cặp), tính lại giữa đường (QĐ-013) |
+| 10 | Đánh giá offline bằng tốc độ thật | 🔶 làm sớm 30/10 (QĐ-012): 630 chuyến, tối ưu nhanh hơn ngắn nhất 19,4% (khắt khe 16,1%), không chậm hơn 91% (89%) → ĐẠT tiêu chí. Tính lại giữa đường (QĐ-013): vào đường đóng 3 → 0 (khắt khe 7 → 3, đều không còn đường tránh), chuyến có đổi tuyến nhanh hơn 6% (khắt khe 4%). ⏳ chạy lại khi nhiều ngày |
+| 8, 9, 11–13 | API + web, AWS phục vụ, chạy thử ảo, báo cáo | ⬜ (bảng theo dõi 2 bộ thu đã có: `he_thong/bang_theo_doi/`) |
 
 Ngoài kế hoạch gốc đã làm thêm: D11 Kaggle, D13 Zenodo, D14 lịch, D15 km/h, D16 POI; kiểm thử tự động (34 test + 50 bất biến); repo GitHub công khai.
 **Nút thắt:** phần lớn việc tuần 4–6 cần dữ liệu tích lũy nhiều ngày (thứ trong tuần, mưa, "hôm qua/tuần trước").

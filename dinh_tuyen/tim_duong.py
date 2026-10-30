@@ -23,6 +23,9 @@ import numpy as np
 
 from do_thi import TEP_RA, khoang_cach
 
+TRUC_LON = {'trunk', 'primary', 'secondary'}
+GOC_RE_TRAI = math.radians(30)      # đổi hướng sang TRÁI ≥ 30° mới tính là rẽ trái (cong nhẹ thì không)
+
 
 class BanDo:
     def __init__(self, du_lieu):
@@ -46,6 +49,11 @@ class BanDo:
         self._xy = {n: (d['x'] * 111_320 * cos0, d['y'] * 110_574) for n, d in self.G.nodes(data=True)}
         self._co_luat = set(self.cam) | set(self.chi)
         self._thu_tu_nut = {n: k for k, n in enumerate(self.G.nodes())}
+        # Nút giao có TRỤC LỚN (≥ 3 nút kề, có cạnh trunk/primary/secondary): rẽ trái ở đây phải cắt dòng xe
+        # của trục lớn (xe chạy bên phải) — chỗ duy nhất áp phạt rẽ trái.
+        truc = {n for a, b, d in self.G.edges(data=True) if d['loai'] in TRUC_LON for n in (a, b)}
+        self._nut_re_trai = {n for n in truc
+                             if len(set(self.G.successors(n)) | set(self.G.predecessors(n))) >= 3}
 
     @classmethod
     def nap(cls, tep=TEP_RA):
@@ -59,6 +67,14 @@ class BanDo:
         i = int(np.argmin(dx * dx + dy * dy))
         return int(self._nut[i]), float(math.hypot(dx[i], dy[i]))
 
+    def la_re_trai_lon(self, p, u, v):
+        """Đi p -> u -> v có phải RẼ TRÁI tại nút giao có trục lớn không (góc đổi hướng ≥ 30° về bên trái)."""
+        if p is None or u not in self._nut_re_trai:
+            return False
+        (xp, yp), (xu, yu), (xv, yv) = self._xy[p], self._xy[u], self._xy[v]
+        ax, ay, bx, by = xu - xp, yu - yp, xv - xu, yv - yu
+        return math.atan2(ax * by - ay * bx, ax * bx + ay * by) >= GOC_RE_TRAI
+
     def _duoc_re(self, duong_vao, nut, duong_ra):
         if duong_vao is None:
             return True
@@ -68,8 +84,16 @@ class BanDo:
         return duong_ra not in self.cam.get((duong_vao, nut), ())
 
     def tim(self, diem_di, diem_den, trong_so='dai', ap_luat_re=True, chi_phi=None, v_max_kmh=None,
-            uoc_luong_them=None):
+            uoc_luong_them=None, di_tu=None, phat_re_trai_s=0.0):
         """
+        Trạng thái tìm kiếm = (nút, NÚT VỪA RỜI), tức là theo cạnh đi tới (31/10/2026; trước đó là (nút,
+        đường đang đi) — gộp hai chiều xe tới cùng một nút trên đường hai chiều, sai khi chi phí phụ thuộc
+        hướng tới như rẽ trái / không quay đầu). Luật cấm rẽ vẫn tra theo đường của cạnh đi tới.
+        di_tu:    (tùy chọn) (nút trước, nút hiện tại) — xe ĐANG CHẠY vừa đi hết cạnh này (tính lại tuyến
+                  giữa đường). Khi đó bỏ qua diem_di; luật cấm rẽ và phạt rẽ trái áp ngay ở nút đầu, không
+                  quay đầu về nút trước.
+        phat_re_trai_s: cộng vào CHI PHÍ (không vào thời gian dự kiến) mỗi lần rẽ trái tại nút giao có trục
+                  lớn (la_re_trai_lon).
         trong_so: 'dai' (mét — đường ngắn nhất) hoặc 'tg' (giây — đường nhanh nhất, tốc độ mặc định).
         chi_phi:  (tùy chọn) hàm (chỉ số cạnh, số giây đã đi) -> (chi phí, số giây qua cạnh), hoặc None
                   nếu cạnh bị cấm (đường đóng). Dùng cho định tuyến THEO THỜI ĐIỂM (dinh_tuyen/ba_phuong_an.py):
@@ -81,7 +105,12 @@ class BanDo:
         Trả về dict: nut, dai_m, tg_s, so_nut_da_xet, ten_duong (các đường đi qua); có chi_phi thì thêm
         chi_phi (tổng) và tg_du_kien_s (tổng giây theo hàm chi_phi).
         """
-        nguon, lech_di = self.nut_gan_nhat(*diem_di)
+        if di_tu is None:
+            nguon, lech_di = self.nut_gan_nhat(*diem_di)
+            p_dau, w_dau = None, None
+        else:
+            p_dau, nguon = di_tu
+            w_dau, lech_di = self.G[p_dau][nguon]['way'], 0.0
         dich, lech_den = self.nut_gan_nhat(*diem_den)
         if chi_phi is not None:
             v_h = v_max_kmh / 3.6               # chi phí >= thời gian (phạt chỉ cộng thêm)
@@ -95,35 +124,44 @@ class BanDo:
         them = uoc_luong_them(dich) if uoc_luong_them is not None else None
         stt = self._thu_tu_nut
 
-        def h(n):
-            x, y = xy[n]
-            e = hypot(x - xd, y - yd) * he_so_h
-            return e if them is None else max(e, them[stt[n]])
+        nho_h = {}          # ước lượng chỉ phụ thuộc NÚT, mà mỗi nút có nhiều trạng thái (nút, nút trước)
 
-        bat_dau = (nguon, None)
+        def h(n):
+            e = nho_h.get(n)
+            if e is None:
+                x, y = xy[n]
+                e = hypot(x - xd, y - yd) * he_so_h
+                if them is not None:
+                    e = max(e, them[stt[n]])
+                nho_h[n] = e
+            return e
+
+        bat_dau = (nguon, p_dau)
         tot_nhat = {bat_dau: 0.0}
         giay = {bat_dau: 0.0}
         truoc = {bat_dau: None}
-        hang_doi = [(h(nguon), 0.0, nguon, None)]
+        hang_doi = [(h(nguon), 0.0, nguon, p_dau, w_dau)]
         da_xet = 0
+        nut_re_trai = self._nut_re_trai if phat_re_trai_s else ()
+        la_re_trai = self.la_re_trai_lon
         while hang_doi:
-            _, g, u, w = heapq.heappop(hang_doi)
-            if g > tot_nhat.get((u, w), math.inf):
+            _, g, u, p, w = heapq.heappop(hang_doi)
+            if g > tot_nhat.get((u, p), math.inf):
                 continue
             da_xet += 1
             if u == dich:
-                kq = self._ket_qua((u, w), truoc, da_xet, lech_di, lech_den)
+                kq = self._ket_qua((u, p), truoc, da_xet, lech_di, lech_den, p_dau)
                 if chi_phi is not None:
                     kq['chi_phi'] = round(g, 1)
-                    kq['tg_du_kien_s'] = round(giay[(u, w)])
+                    kq['tg_du_kien_s'] = round(giay[(u, p)])
                 return kq
-            nut_truoc = truoc[(u, w)][0] if truoc[(u, w)] else None
-            t_u = giay[(u, w)]
+            t_u = giay[(u, p)]
             kiem_re = ap_luat_re and (w, u) in co_luat
+            xet_trai = p is not None and u in nut_re_trai
             for v, w2, i, dai, tg in ke.get(u, ()):
                 if kiem_re and not self._duoc_re(w, u, w2):
                     continue
-                if v == nut_truoc and w2 == w:
+                if v == p and w2 == w:
                     continue        # không quay đầu giữa đường
                 if chi_phi is None:
                     c, s = (dai if trong_so == 'dai' else tg), tg
@@ -132,16 +170,23 @@ class BanDo:
                     if cp is None:
                         continue    # cạnh bị cấm (đường đang đóng)
                     c, s = cp
+                if xet_trai and la_re_trai(p, u, v):
+                    c += phat_re_trai_s
                 g2 = g + c
-                tt = (v, w2)
+                tt = (v, u)
                 if g2 < tot_nhat.get(tt, math.inf):
                     tot_nhat[tt] = g2
                     giay[tt] = t_u + s
-                    truoc[tt] = (u, w)
-                    heapq.heappush(hang_doi, (g2 + h(v), g2, v, w2))
+                    truoc[tt] = (u, p)
+                    heapq.heappush(hang_doi, (g2 + h(v), g2, v, u, w2))
         return None
 
-    def _ket_qua(self, tt, truoc, da_xet, lech_di, lech_den):
+    def dem_re_trai_lon(self, nut, p_dau=None):
+        """Số lần rẽ trái tại nút giao có trục lớn dọc dãy nút (p_dau: nút xe vừa rời trước nút đầu)."""
+        day = ([p_dau] if p_dau is not None else []) + list(nut)
+        return sum(self.la_re_trai_lon(a, b, c) for a, b, c in zip(day, day[1:], day[2:]))
+
+    def _ket_qua(self, tt, truoc, da_xet, lech_di, lech_den, p_dau=None):
         nut = []
         while tt:
             nut.append(tt[0])
@@ -160,6 +205,7 @@ class BanDo:
             'duong_dung': [c['way'] for c in canh],
             'ten_duong': ten,
             'so_nut_da_xet': da_xet,
+            'so_re_trai_lon': self.dem_re_trai_lon(nut, p_dau),
             'lech_diem_di_m': round(lech_di), 'lech_diem_den_m': round(lech_den),
         }
 

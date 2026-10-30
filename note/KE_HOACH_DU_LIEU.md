@@ -28,6 +28,7 @@ Lập 29/10/2026. Mục tiêu: gộp mọi nguồn (lịch sử 2020–2021 + th
 | D14 | Lịch: ngày lễ, Tết, cuối tuần, đợt COVID, ngày đi học | 2020 → 2027 | ngày | tự lập | **Xong 30/10** (`xu_ly/lich.py`). Cờ ngày đặc biệt; loại/gắn nhãn giai đoạn bất thường |
 | D15 | TomTom Flow kiểu `absolute` | 30/10/2026 04:11 → (5 phút, chỉ bộ thu AWS) | ~28k cạnh / 5 phút | Evaluation | **km/h thật** (bước 5 km/h) → thời gian đi qua cạnh, tốc độ đường trống mỗi cạnh |
 | D16 | OSM điểm thu hút giao thông (trường, chợ, bệnh viện, TTTM, trạm buýt) | ảnh chụp khi tải | điểm | ODbL | Đặc trưng tĩnh mỗi cạnh: mật độ/khoảng cách tới trường, chợ… (`tai_osm.py poi`) |
+| D9 | METR-LA (207 cảm biến Los Angeles) + PEMS-BAY (325 cảm biến vùng Vịnh) — **tải 30/10** vào `du_lieu/metr_la/` | 03–06/2012; 01–06/2017 | cảm biến / 5 phút | phát hành kèm repo DCRNN (mã MIT; dữ liệu không ghi giấy phép riêng → chỉ dùng nghiên cứu, không phát tán lại) | **Bộ chuẩn có số công bố**: kiểm đường ống dự báo + mô hình học sâu (`mo_hinh/chuan_metr_la.py`, `hoc_sau.py`) trong lúc dữ liệu TP.HCM còn ít ngày |
 
 ### Khảo sát nhanh D11 (29/10/2026)
 

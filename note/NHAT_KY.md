@@ -4,6 +4,82 @@ Mục mới nhất ở trên cùng.
 
 > 30/10/2026 11:53: các mục trong ngày từng ghi giờ ước chừng (13:00, 14:30…) — SAI, đồng hồ thật khi đó chưa tới 12:00. Đã sửa: chỉ ghi giờ có bằng chứng (giờ tệp, lệnh `date`, giờ trên AWS).
 
+## 30–31/10/2026 (22:56 → 00:05) — tuần 7 xong phần còn lại: phạt rẽ trái, tuyến thay thế (QĐ-016)
+
+- `tim_duong.py`:
+  - trạng thái A* = (nút, nút vừa rời);
+  - `la_re_trai_lon`, `dem_re_trai_lon`, `phat_re_trai_s`, `so_re_trai_lon` trong kết quả;
+  - nhớ ước lượng h theo nút.
+  - Chi phí 270/270 tuyến trùng khít trước/sau.
+- `ba_phuong_an.py`:
+  - ALT theo cửa sổ 3 giờ, bảng riêng cho phương án tối ưu (`_alt_cho`, `_can_duoi_luc`); `_v_max`;
+  - `PHAT_RE_TRAI_S` = 30; `chi_phi_tuyen(di_tu=)` tính cả phạt rẽ;
+  - `tuyen_thay_the()` (phạt lặp ×1,5; kéo dãn ≤ 1,25; trùng ≤ 70%).
+- `kiem_tra_tuan7.py`: thêm đếm rẽ trái + phần tuyến thay thế → ĐẠT (23:33). 3 phương án chậm nhất 1,23 s; thay thế TB 0,58 s, chậm nhất 2,06 s.
+- `kiem_tra_tuan1.py` vẫn ĐẠT (~130 ms TB, không dùng ALT). pytest 34/34.
+- `cham_tuyen_that.py`: cột `re_trai_*`, `--phat-re-trai=N`.
+  - Có phạt: 18,3% / 84% (chỉ thời gian chạy); trễ rẽ giả định 30 s: 19,2% / 92% (bảng QĐ-016).
+  - Bản trước giữ ở `danh_gia/ket_qua/cham_tuyen_2026-10-30_truoc_re_trai.csv`.
+- Việc tiếp: API + web (tuần 8–9, người dùng muốn để sau) hoặc kiểm tay 30 đoạn ghép; chờ dữ liệu để chạy lại GBM / học sâu.
+
+## 30/10/2026 (22:37 → 22:55) — học sâu trên dữ liệu thật TP.HCM (lần đầu)
+
+- Kéo S3 22:37 (7 s) → tầng bạc 30/10: 272 lần chụp, 0 khoảng trống → tầng vàng 7.416 đoạn, 2 ngày.
+- Người dùng hỏi kéo S3 có tính tiền không → tra AWS Price List (ap-southeast-1): dưới 0,03 USD/tháng; ghi CAN_NHO mục AWS.
+- `hoc_sau.py`: `lan_truyen()` / `ma_tran_thua()` (nhân đồ thị THƯA), `GraphWaveNet(tu_hoc=False, khoi=...)`; mặc định METR-LA giữ nguyên.
+- `mo_hinh/hoc_sau_hcm.py` mới (QĐ-015): chia + thước đo y như `moc_so_sanh.py`, đã kiểm trùng từng ô.
+- `moc_so_sanh.py` chạy lại (112 khung): GBM 7,59 / 9,36 / 10,53.
+- GWN 7,46 / 9,14 / 10,77; GRU 8,08 / 9,71 / 11,05 (điểm %). Mới 1,5 ngày → chưa kết luận.
+- Việc tiếp: phạt rẽ trái + tuyến thay thế (tuần 7).
+
+## 30/10/2026 (17:40 → 20:49) — tính lại tuyến giữa đường + bộ chuẩn METR-LA, học sâu tái lập Graph WaveNet
+
+- **Tính lại giữa đường (QĐ-013):**
+  - `tim_duong.py`: `tim(di_tu=(nút trước, nút hiện tại))`.
+  - `ba_phuong_an.py`: tách `_boi_canh` / `_ham_chi_phi`; thêm `chi_phi_tuyen()`, `tim(di_tu=...)`.
+  - `kiem_tra_tuan7.py`: thêm kiểm Bellman 20/20 → vẫn ĐẠT (17:43).
+  - `danh_gia/cham_tuyen_that.py`: phương án E (chạy song song mọi chuyến theo lần chụp), `--nguong=N`, bộ đếm `ket_dong_E`.
+  - Kết quả: vào đường đóng 3 → 0 (khắt khe 7 → 3, cả 3 không có đường tránh); chuyến có đổi tuyến nhanh hơn 6% (khắt khe 4%).
+  - So ngưỡng 0 / 60 / 120 s: giữ 60 s, lý do là người lái (bảng trong QĐ-013).
+- **METR-LA / PEMS-BAY (QĐ-014, D9):**
+  - Tải ~17:47: `.h5` từ Google Drive tác giả DCRNN (gdown), CSV đồ thị từ repo DCRNN. Đã xóa `adj_mx*.pkl` (không mở pickle lạ).
+  - `pip install gdown tables` chạy được.
+  - `mo_hinh/chuan_metr_la.py`: HA khớp bài báo (4,15 vs 4,16; 2,88 = 2,88), số cạnh đồ thị khớp (1.515 / 2.369).
+  - `mo_hinh/hoc_sau.py`: GRU + Graph WaveNet.
+- **Học sâu** (log `mo_hinh/ket_qua/hoc_sau/chay.log`, 17:55 → 20:49):
+  - Graph WaveNet: dừng sớm vòng 69 (tốt nhất vòng 49), 127 phút → **2,69 / 3,06 / 3,48 MAE**, bài báo 2,69 / 3,07 / 3,53. Tái lập đúng.
+  - GRU: 100 vòng, 47 phút (28 s/vòng) → 3,00 / 3,61 / 4,48 MAE.
+  - Bảng đầy đủ ở QĐ-014.
+- RAM: 3 bộ chấm + học sâu cùng lúc còn 1,5 GB trống → đã dừng bớt, chạy lần lượt.
+- pytest 34/34.
+- Việc tiếp:
+  - chuẩn bị chạy `hoc_sau.py` trên tầng bạc TP.HCM khi đủ ngày (đồ thị = cạnh kề nhau trên bản đồ OSM, 5 phút, r = tỉ lệ tốc độ);
+  - (tùy) PEMS-BAY: `python hoc_sau.py pems-bay gwn` (~3 giờ);
+  - thời tiết lưu trữ 25–28/10: chạy lại `tai_thoi_tiet.py` từ ~03/11 (ERA5 trễ 5–6 ngày).
+
+## 30/10/2026 (xong 16:53) — chấm tuyến bằng tốc độ thật (tuần 10 làm sớm)
+
+- Người dùng đã tắt bộ thu ở máy (15:52). Đồng bộ S3 lúc ~16:30: 198 khung, 0 khoảng trống, 2.538 sự cố.
+- `danh_gia/cham_tuyen_that.py` (+ `--khat-khe`); `ba_phuong_an.py`: `dat_tinh_trang()`, `phuong_an=`, `RUI_RO_KHONG_DO`.
+- Kết quả và quyết định: QĐ-012.
+  - Tối ưu nhanh hơn ngắn nhất 19,4% (khắt khe 16,1%), không chậm hơn ở 91% (89%) chuyến.
+  - Đạt tiêu chí kế hoạch trong cả 2 kịch bản.
+- `danh_gia/ket_qua/` gitignore (vẽ từ dữ liệu TomTom).
+- Heredoc lại làm mất dấu `\` lần 3 (ba_phuong_an.py) → quy tắc mới ở CAN_NHO.
+- Việc tiếp:
+  - tính lại tuyến giữa đường khi có lần chụp mới (né đường bắt đầu đóng);
+  - chấm lại khi có nhiều ngày;
+  - METR-LA (học sâu);
+  - tuyến thay thế, phạt rẽ trái.
+
+## 30/10/2026 (xong 15:57) — soát tiền AWS
+
+- Budgets `thuctap-ngan-sach-thang`: đã dùng 0,05 / 2 USD (2,7%), dự báo cuối tháng 0,06 USD. Cost monitor: Budgets OK, không có chi phí bất thường.
+- Cost breakdown tháng 10: gần như toàn bộ là RDS (bản sao lưu cũ, đã xóa sáng 30/10). S3 chỉ là một vệt rất mỏng.
+  - Chi phí của bộ thu (S3 Singapore, Lambda miễn phí) chậm tới 24 giờ mới hiện. Ước ~0,005 USD/ngày.
+- Đề xuất người dùng tắt bộ thu ở máy (nút Dừng thu trên bảng theo dõi): AWS 188/188 lượt, 0 lỗi.
+- Người dùng đã tắt: `schtasks` báo Disabled, lượt cuối 15:52. Từ đó chỉ còn bộ thu AWS. Tầng bạc ưu tiên AWS sẵn nên không đổi gì.
+
 ## 30/10/2026 (xong 12:38) — định tuyến 3 phương án theo thời điểm (tuần 7)
 
 - QĐ-011. Tệp:

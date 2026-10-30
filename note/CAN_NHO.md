@@ -19,6 +19,11 @@
   - Sửa Lambda thì chạy `thu_o_may.py` cho ĐẠT trước, sau đó xem log lượt kế tiếp. 30/10 04:11 đã làm vậy khi thêm ô absolute.
   - Trong log tìm `o_them_duoc`: chỉ bản mới in ra trường này.
 - Kéo dữ liệu S3 về máy: `thu_thap/KEO_S3.bat` (aws s3 sync, profile `thuctap-doc`, chỉ tải tệp mới).
+  - **Có tính tiền nhưng gần 0** (bảng giá AWS Price List ap-southeast-1, công bố 15/10/2026, tra 30/10):
+    - truyền ra Internet: 100 GB đầu mỗi tháng MIỄN PHÍ (gộp mọi dịch vụ, mọi vùng), sau đó 0,12 USD/GB;
+    - GET 0,004 USD / 10.000 lần; LIST/PUT 0,005 USD / 1.000 lần.
+  - Bộ thu sinh ~65 MB / ~600 tệp mỗi ngày → kéo về ~2 GB, ~18 nghìn GET/tháng → dưới 0,03 USD/tháng. Phía Lambda ghi lên (~18 nghìn PUT/tháng ≈ 0,09 USD) mới là khoản chính.
+  - Nếu sau này đọc S3 nhiều (vd web công khai tải thẳng từ S3) thì tính lại — 100 GB miễn phí dùng chung toàn tài khoản.
   - Cần user IAM CHỈ ĐỌC, do người dùng tự tạo khóa, Claude không cầm khóa.
   - Policy inline cho user đó:
     - `s3:ListBucket` trên `arn:aws:s3:::<S3_BUCKET>`, điều kiện `s3:prefix` like `dong/*`;
@@ -67,7 +72,7 @@
 - Overpass (OSM) rất hay quá tải: 30/10 lúc 04:00–05:00 mọi máy chủ trả 502/504 hoặc hết giờ chờ, tải 16 ô mất 59 phút. `tai_osm.py` đã lưu từng ô để tải tiếp; cứ để chạy nền, đừng chạy lại từ đầu.
 - Dựng lại đồ thị (`do_thi.py`) là chỉ số cạnh đổi → phải chạy `BoGhep.dung()` và ghép lại `tomtom/canh/` từ `tomtom/tho/`.
 - TomTom gần như không có dữ liệu ở hẻm/residential: đường nhỏ phải dùng tốc độ ước lượng (theo loại đường × khung giờ), ghi rõ trong báo cáo.
-- Bộ thu chỉ chạy khi máy bật và đã đăng nhập. Máy ngủ/tắt = khoảng trống trong dữ liệu. Khi phân tích phải đánh dấu khoảng trống, không nội suy bừa.
+- (Từ 30/10/2026 15:52 bộ thu ở máy ĐÃ TẮT — người dùng bấm Dừng thu; chỉ còn AWS. Bật lại: nút Bắt đầu thu trên bảng theo dõi.) Bộ thu ở máy chỉ chạy khi máy bật và đã đăng nhập. Máy ngủ/tắt = khoảng trống trong dữ liệu. Khi phân tích phải đánh dấu khoảng trống, không nội suy bừa.
 
 - **Đường ĐÓNG ≠ kẹt xe.** TomTom ghi mức 0 kèm `road_closure` cho đường đang đóng. Ngày 30/10: 8.798 ô mức 0 có cờ đóng, 4.089 ô mức 0 không có cờ.
   - 3 "đoạn kẹt nhất" ban đầu của M1 (Cách Mạng Tháng Tám, Tố Hữu, Tân Kỳ Tân Quý, r = 0 suốt 90 phút) hóa ra là đường đóng.
@@ -84,9 +89,11 @@
 - `python kiem_thu/kiem_du_lieu.py`: 50 bất biến trên dữ liệu THẬT mọi tầng. Chạy sau mỗi lần dựng lại bạc/vàng.
   - Lần đầu bắt được 2 lỗi thật: gộp đoạn ghi đè 3 đoạn; đường đóng một phần bị trộn mức 0.
 - Sửa mã có dấu `\` thì dùng công cụ Edit, KHÔNG dùng heredoc Python trong Git Bash.
-  - 30/10 lại dính hai lần:
+  - 30/10 dính BA lần:
     - dấu nối dòng (gạch ngược + xuống dòng) thành hai ký tự gạch ngược + n, hỏng `kiem_tra_ghep_nhanh.py`;
-    - chính dòng ghi chú này cũng bị cắt.
+    - chính dòng ghi chú này cũng bị cắt;
+    - `ba_phuong_an.py` (he_so).
+  - Quy tắc: trong mã dùng ngoặc tròn để xuống dòng, KHÔNG dùng gạch ngược nối dòng. Mọi sửa có `\` thì dùng Edit.
   - Soát nhanh: `python -c "import ast,glob; [ast.parse(open(f,encoding='utf-8').read()) for f in glob.glob('**/*.py', recursive=True) if 'du_lieu' not in f]"`.
 
 ## Bộ dữ liệu Kaggle TP.HCM (D11)
@@ -109,7 +116,17 @@
 
 ## Công cụ
 
-- Cài gói Python từ PyPI bằng pip có thể bị trình phân quyền chặn. Ưu tiên tự viết phần nhỏ (như `mvt.py`), hoặc nhờ người dùng thêm quyền.
+- Cài gói Python từ PyPI bằng pip có thể bị trình phân quyền chặn. Ưu tiên tự viết phần nhỏ (như `mvt.py`), hoặc nhờ người dùng thêm quyền. (30/10/2026 ~17:46: `pip install gdown tables` chạy được.)
+- **Không mở pickle tải từ ngoài về** (`.pkl`, `torch.load(weights_only=False)` tệp lạ): mở pickle = chạy mã trong tệp. Bộ METR-LA: bỏ `adj_mx*.pkl` của repo DCRNN, dựng lại ma trận kề từ `distances_*.csv` (khớp số cạnh công bố 1.515 / 2.369). Tệp `.h5` của pandas cũng có thể chứa pickle (cột kiểu object) → soát bằng `tables.open_file` + `walk_nodes` trước (METR-LA/PEMS-BAY chỉ có mảng số/chuỗi).
+- Lệnh `python -c` in tên địa điểm tiếng Việt ra màn hình → `UnicodeEncodeError` cp1252. Đặt `PYTHONIOENCODING=utf-8` trước lệnh (các script chính đã tự `sys.stdout.reconfigure(encoding='utf-8')`).
+- **Đo rồi mới kết luận** (30/10, QĐ-013): tưởng "đổi tuyến liên tục (ngưỡng 0) thì thiệt vì nhiễu" — đo ra ngưỡng 0 lại NHANH NHẤT; lý do giữ 60 s là vì người lái. Lý do ghi trong QĐ phải khớp số đo, không phải trực giác.
+- Định tuyến (31/10, QĐ-016):
+  - Chi phí phụ thuộc HƯỚNG TỚI nút (rẽ trái, quay đầu) thì trạng thái A* phải chứa nút trước. Đổi mô hình chi phí kiểu này thì so chi phí cũ / mới trên 270 tuyến trước khi tin.
+  - A* viết bằng Python chậm theo SỐ TRẠNG THÁI: muốn nhanh thì làm cận dưới chặt hơn (ALT theo giờ), đừng thêm mốc (16–24 mốc gần như không đỡ).
+  - Bộ chấm tốc độ thật KHÔNG tính trễ ở nút giao (đèn, rẽ trái) → mọi phạt nút giao luôn trông "thiệt" khi chỉ chấm thời gian chạy; phải thử thêm kịch bản trễ giả định cộng ĐỀU cho mọi tuyến.
+- `distances_bay_2017.csv` KHÔNG có dòng tiêu đề, `distances_la_2012.csv` có — đọc kiểu `header=None` rồi bỏ dòng "from" nếu có.
+- Google Drive (thư mục chia sẻ của tác giả bài báo): `gdown.download_folder(id=..., skip_download=True)` để xem mã tệp, rồi `gdown.download(id=...)`.
+- GPU máy nhà: GTX 1650 4 GB, PyTorch 2.6 cu124. Graph WaveNet trên METR-LA ~116 s/vòng (bài báo: 54 s trên Titan Xp) → 100 vòng ≈ 3 giờ: chạy nền, có điểm dừng mỗi vòng (`hoc_sau.py --tiep` khi máy ngủ giữa chừng).
 
 - Overpass (OpenStreetMap) trả 504 khi tải cả khu trung tâm một lần → `tai_osm.py` chia 2×2 ô + máy chủ dự phòng.
 - Thời tiết lưu trữ Open-Meteo lưới thô: 5 điểm trong thành phố chỉ ra 3 chuỗi khác nhau.

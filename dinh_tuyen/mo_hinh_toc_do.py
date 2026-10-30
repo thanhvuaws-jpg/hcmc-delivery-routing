@@ -127,6 +127,7 @@ class MoHinhTocDo:
                 r_ht[i[mo]] = np.maximum(s['muc'].to_numpy()[mo] / 100, R_SAN)
         m = cls(v, r_gio, r_ht, luc_ht, cam, phan_dong)
         m.gio_uoc_luong = self_thieu         # giờ chưa có dữ liệu thật, r đang ước lượng
+        m.co_so_do = dem_c.sum(axis=0) > 0   # cạnh từng có số đo TomTom (còn lại: hẻm/đường nhỏ, ước lượng)
         return m
 
     def km_h(self, i, gio, dung_hien_tai=False):
