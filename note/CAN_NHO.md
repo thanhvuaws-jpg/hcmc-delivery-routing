@@ -2,6 +2,8 @@
 
 ## Ranh giới
 
+- Giờ ghi trong `NHAT_KY.md` phải lấy từ `date` hoặc giờ tệp/AWS — KHÔNG ước chừng (30/10/2026 từng ghi "14:30" khi đồng hồ mới 11:53).
+
 - Đồ án chuyên ngành ở `../doanchuyennganh`, đang tạm gác. Làm thực tập thì không sửa bên đó.
 - Bí mật (khóa AWS, mật khẩu, token, IP) không ghi vào tệp nào, kể cả sổ ghi chú này.
 
@@ -65,12 +67,23 @@
 
 - **Đường ĐÓNG ≠ kẹt xe.** TomTom ghi mức 0 kèm `road_closure` cho đường đang đóng. Ngày 30/10: 8.798 ô mức 0 có cờ đóng, 4.089 ô mức 0 không có cờ.
   - 3 "đoạn kẹt nhất" ban đầu của M1 (Cách Mạng Tháng Tám, Tố Hữu, Tân Kỳ Tân Quý, r = 0 suốt 90 phút) hóa ra là đường đóng.
-  - Tầng vàng tính r chỉ trên phần đường MỞ, thêm cột `ty_le_dong`. M1 tách đường đóng ra riêng.
+  - Từ QĐ-010, bộ ghép tách mẫu đóng/mở: `muc` chỉ từ phần mở, `phu_dong` = phần đóng. Cạnh `phu = 0` (đóng hết) thì `muc` vô nghĩa. M1 vẫn bỏ mọi cạnh có phần đóng.
   - Khi tìm đường thì cạnh đóng phải cấm, không chỉ "chậm".
 - Kiểu ô `absolute` (km/h) làm tròn bước 5 km/h; tối 30/10 04:07 thấy 0–75 km/h. Tốc độ đường trống suy ra = km/h ÷ tỉ lệ relative: trung vị 30, p10 25, p90 40 km/h.
 - Bộ ghép kiểu cũ (từng điểm, Python) mất 19 s/lần chụp; bản numpy 0,7 s, kết quả trùng (`dinh_tuyen/kiem_tra_ghep_nhanh.py`).
   - Dữ liệu từ parquet là `numpy.float32` nên `isinstance(x, float)` = False. Bộ ghép cũ bỏ hết đoạn vì vậy. Phải đổi `float()` trước, `doan_tu_tho` đã làm.
 - Hampel trên pandas rolling mất 22 s/ngày. Bản sắp xếp cửa sổ numpy (`trung_vi_truot`) mất 0,8 s, kết quả trùng.
+
+## Kiểm thử (từ 30/10/2026)
+
+- `python -m pytest kiem_thu -q`: 34 test đơn vị trên dữ liệu giả có đáp án tính tay (ghép, Hampel, âm lịch, tên đường…). Sửa hàm xử lý nào thì chạy lại.
+- `python kiem_thu/kiem_du_lieu.py`: 50 bất biến trên dữ liệu THẬT mọi tầng. Chạy sau mỗi lần dựng lại bạc/vàng.
+  - Lần đầu bắt được 2 lỗi thật: gộp đoạn ghi đè 3 đoạn; đường đóng một phần bị trộn mức 0.
+- Sửa mã có dấu `\` thì dùng công cụ Edit, KHÔNG dùng heredoc Python trong Git Bash.
+  - 30/10 lại dính hai lần:
+    - dấu nối dòng (gạch ngược + xuống dòng) thành hai ký tự gạch ngược + n, hỏng `kiem_tra_ghep_nhanh.py`;
+    - chính dòng ghi chú này cũng bị cắt.
+  - Soát nhanh: `python -c "import ast,glob; [ast.parse(open(f,encoding='utf-8').read()) for f in glob.glob('**/*.py', recursive=True) if 'du_lieu' not in f]"`.
 
 ## Bộ dữ liệu Kaggle TP.HCM (D11)
 

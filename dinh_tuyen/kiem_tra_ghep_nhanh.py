@@ -85,10 +85,12 @@ class GhepMoc:
                 if c < 0:
                     khong_ghep += BUOC_M
                     continue
-                o = cong.setdefault(c, [0.0, 0.0, False])
-                o[0] += muc * BUOC_M
-                o[1] += BUOC_M
-                o[2] = o[2] or dong
+                o = cong.setdefault(c, [0.0, 0.0, 0.0])
+                if dong:                      # phần đóng: chỉ đếm mét, không vào mức
+                    o[2] += BUOC_M
+                else:
+                    o[0] += muc * BUOC_M
+                    o[1] += BUOC_M
         return cong, khong_ghep
 
 
@@ -110,8 +112,8 @@ def main():
         b1, b2 = bang_canh(c1).set_index('chi_so'), bang_canh(c2).set_index('chi_so')
         cung_tap = b1.index.equals(b2.index)
         lech_muc = int((b1['muc'] != b2['muc']).sum()) if cung_tap else -1
-        ok = cung_tap and lech_muc <= 0.001 * len(b2) and abs(k1 - k2) < 1e-6 \
-            and (b1['dong_duong'] == b2['dong_duong']).all() if cung_tap else False
+        ok = (cung_tap and lech_muc <= 0.001 * len(b2) and abs(k1 - k2) < 1e-6
+              and (b1['dong_duong'] == b2['dong_duong']).all() and (b1['dong_m'] == b2['dong_m']).all())
         dat &= bool(ok)
         print(f'{os.path.relpath(t, GOC)}: nhanh {t1:.2f}s / moc {t2:.1f}s | canh {len(b1)} vs {len(b2)} '
               f'| lech muc {lech_muc} | khong ghep {k1:.0f} vs {k2:.0f} m -> {"DAT" if ok else "KHONG DAT"}')

@@ -2,7 +2,54 @@
 
 Mục mới nhất ở trên cùng.
 
-## 30/10/2026 (13:00–13:15) — M2 điểm nóng Getis-Ord Gi*
+> 30/10/2026 11:53: các mục trong ngày từng ghi giờ ước chừng (13:00, 14:30…) — SAI, đồng hồ thật khi đó chưa tới 12:00. Đã sửa: chỉ ghi giờ có bằng chứng (giờ tệp, lệnh `date`, giờ trên AWS).
+
+## 30/10/2026 (xong lúc 11:53) — tốc độ thật cho định tuyến
+
+- `xu_ly/toc_do_canh.py` → `bac/toc_do_canh.parquet`, `bac/toc_do_ho_so.parquet`.
+  - 2,66 triệu quan sát km/h, 35.051 cạnh (04:10–10:50 ngày 30/10).
+  - Tốc độ đường trống từng cạnh = trung vị (km/h ÷ r) khi r ≥ 0,85, ≥ 6 lần: 33.006 cạnh.
+  - So bảng đoán `do_thi.TOC_DO`:
+    - primary 35 / secondary 30: ĐÚNG;
+    - tertiary đoán 28 / đo 30;
+    - trunk 40 / 45;
+    - residential (loại TomTom có đo) 20 / 25;
+    - link 22–30 / 30–35;
+    - service 15 / 25.
+  - Hồ sơ giờ dùng TB ĐIỀU HÒA trọng số dài (đúng cho thời gian đi; km/h TomTom làm tròn 5 nên trung vị ra số tròn).
+    - 4h: primary 33,3, secondary 30,4, tertiary 27,9, residential 23,3 km/h;
+    - **7–10h: 16–17,5 km/h mọi loại** → thời gian đi cao điểm ~1,9–2× lúc vắng.
+  - Đối chiếu D12 (TomTom Traffic Index 2025, cao điểm chiều 14,8 km/h): cùng cỡ → M8 sơ bộ khớp.
+- Việc tiếp cho định tuyến:
+  - trọng số thời gian theo giờ: cạnh có TomTom → hồ sơ cạnh khi đủ ngày; không có → hồ sơ loại × giờ;
+  - cạnh đang đóng (tầng bạc `phu_dong`) → cấm.
+
+
+## 30/10/2026 (trước 11:53) — kiểm thử tự động, sửa 2 lỗi dữ liệu
+
+- Git: repo dùng danh tính riêng `thanhvuaws-jpg` + email noreply GitHub (`git config` cục bộ). Commit đầu viết lại tác giả → d244204, push `--force-with-lease`.
+- `kiem_thu/`:
+  - `conftest.py`, `test_ghep_tomtom.py`, `test_bac_tomtom.py`, `test_lich_va_ngap.py`: 34 test, ĐẠT;
+  - `kiem_du_lieu.py`: 50 bất biến trên dữ liệu thật.
+  - `BoGhep.tu_toa_do(xy)` tách khỏi `dung()` để test được trên bản đồ giả. Chỉ mục dựng lại trùng từng byte bản cũ.
+- Lỗi 1 (`doan_duong.py`): đi chuỗi lấn sang cạnh đã thuộc đoạn khác → 3 đoạn mất cạnh đầu. Thêm điều kiện dừng `da_dung`.
+- Lỗi 2 (QĐ-010): đường đóng một phần bị trộn mức 0. Bộ ghép tách mẫu đóng/mở; tầng bạc thêm `phu_dong`.
+  - Đã chạy lại: doan_duong → bac_tomtom --lam-lai → vang → kiem_du_lieu 50/50.
+  - Vàng 30/10: 346.388 dòng (lấy lại phần mở của cạnh đóng một phần).
+- Kết quả M1/M2 ở `khai_pha/ket_qua/` tạo TRƯỚC 2 lần sửa (số đoạn đổi rất ít). Chạy lại khi cần dùng số liệu.
+
+
+## 30/10/2026 (trước 11:53) — lên GitHub công khai
+
+- Repo: https://github.com/thanhvuaws-jpg/hcmc-delivery-routing (Public). Commit đầu ed60298: 52 tệp mã + ghi chú.
+- Trước khi commit đã:
+  - chuyển tên bucket vào `.env` (`S3_BUCKET=`), `KEO_S3.bat` đọc từ đó (đã thử chạy được);
+  - bỏ email/tên bucket khỏi `note/`;
+  - gitignore kết quả vẽ từ TomTom (`khai_pha/ket_qua/`, `mo_hinh/ket_qua/`, `tuan3_ket_xe.png`) và `dist/`.
+- Kiểm sau khi đẩy: `.env` và `du_lieu/` không có trên GitHub (404).
+
+
+## 30/10/2026 (sau 11:24) — M2 điểm nóng Getis-Ord Gi*
 
 - `khai_pha/m2_diem_nong.py` → `khai_pha/ket_qua/m2_2026-10-30_0730-0900.csv/.png`.
   - x = 1 − r TB (tầng vàng, đã bỏ đường đóng); lân cận 400 m nhị phân gồm chính nó; Benjamini–Hochberg FDR 5%.
@@ -23,7 +70,7 @@ Mục mới nhất ở trên cùng.
   6. M2 lặp cho cao điểm chiều và nhiều ngày; đối chiếu với 186 điểm ùn tắc của Công an nếu tìm được danh sách.
 
 
-## 30/10/2026 (12:30–13:00) — M1 mô tả + phát hiện đường đóng ghi 0
+## 30/10/2026 (sau 11:24) — M1 mô tả + phát hiện đường đóng ghi 0
 
 - `khai_pha/m1_mo_ta.py` (ngày 30/10, cao điểm 07:30–09:00) → `khai_pha/ket_qua/m1_2026-10-30_*`:
   - hồ sơ giờ (csv + png), bản đồ kẹt (png), top đoạn (csv).
@@ -35,7 +82,7 @@ Mục mới nhất ở trên cùng.
   - Vàng sau sửa: 29/10 151.831 dòng, 30/10 317.195 dòng.
 
 
-## 30/10/2026 (11:40–12:30) — đoạn đường, tầng vàng, mốc so sánh đầu tiên
+## 30/10/2026 (tới 11:24, giờ tệp moc_*_1124.json) — đoạn đường, tầng vàng, mốc so sánh đầu tiên
 
 - `xu_ly/canh_tinh.py` → `bac/canh_tinh.parquet`: 350.839 cạnh × 32 cột, 575 s, phần lớn là độ trung gian 300 nguồn.
   - Cạnh trung gian cao nhất: Công trường Dân Chủ, Hoàng Văn Thụ.
@@ -59,7 +106,7 @@ Mục mới nhất ở trên cùng.
 - `thu_thap/KEO_S3.bat` giờ chạy: sync → bac_tomtom → bac_su_co → bac_thoi_tiet → vang.
 
 
-## 30/10/2026 (11:00–11:40) — tầng bạc thời tiết, điểm giao hàng, điểm ngập, đặc trưng tĩnh
+## 30/10/2026 (sau 10:45) — tầng bạc thời tiết, điểm giao hàng, điểm ngập, đặc trưng tĩnh
 
 - `xu_ly/bac_thoi_tiet.py` →
   - `bac/thoi_tiet_gio.parquet` (298.860 dòng). Lưu trữ tới 24/10; giờ sau đó lấy bản dự báo phát hành SAU giờ đó (`du_bao_sau`).
@@ -83,7 +130,7 @@ Mục mới nhất ở trên cùng.
   - 34 "rốn ngập" Sở Xây dựng (25/06/2026): đa số ngoài vùng, PC08 mới hơn.
 
 
-## 30/10/2026 (10:30–11:00) — khóa chỉ-đọc S3, kéo dữ liệu AWS, đo nhiễu hai nguồn
+## 30/10/2026 (IAM tạo 10:34, kéo S3 ~10:40) — khóa chỉ-đọc S3, kéo dữ liệu AWS, đo nhiễu hai nguồn
 
 - IAM:
   - Tạo user `thuctap-doc-s3` + policy inline `chi-doc-s3-thu-du-lieu` (0 lỗi IAM).

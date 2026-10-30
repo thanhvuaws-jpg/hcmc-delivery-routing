@@ -148,7 +148,7 @@ def luu_chup(luc, doan):
     tho/YYYY-MM-DD/HHMM.parquet  : bản thô TomTom (mức, loại đường, phủ, đóng đường, hình học)
                                    — để ghép lại được nếu sau này sửa đồ thị/cách ghép
     canh/YYYY-MM-DD/HHMM.parquet : mức kẹt theo CẠNH CỐ ĐỊNH của đồ thị xe máy
-                                   (chi_so, muc %, phu_m, dong_duong) — dùng cho mô hình
+                                   (chi_so, muc % phần mở, phu_m, dong_m, dong_duong) — dùng cho mô hình
 
     Vì sao không lưu theo "mã đoạn TomTom": TomTom cắt đoạn theo chỗ mức kẹt thay đổi,
     nên cùng con đường có hình học khác nhau giữa các lần chụp (28% đoạn đổi sau 5 phút,
@@ -177,7 +177,7 @@ def luu_chup(luc, doan):
     canh = bang_canh(cong)
     canh.insert(0, 'thoi_diem', tg)
     _luu_parquet(canh, os.path.join(THU_MUC, 'canh', ngay, f'{gio}.parquet'))
-    da_ghep = sum(v[1] for v in cong.values())
+    da_ghep = sum(v[1] + v[2] for v in cong.values())
     return len(tho), len(canh), 100 * da_ghep / max(da_ghep + khong_ghep, 1)
 
 

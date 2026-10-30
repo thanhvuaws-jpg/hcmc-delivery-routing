@@ -60,14 +60,14 @@ def main():
     # ── Silver TomTom -> (khung 5 phút, đoạn): TB theo dài × phủ ──
     phan = []
     for tep in sorted(glob.glob(os.path.join(BAC, 'tomtom_canh', '*.parquet'))):
-        s = pd.read_parquet(tep, columns=['khung', 'chi_so', 'muc', 'toc_do', 'phu', 'dong_duong'])
-        w_tong = dai_canh[s['chi_so']] * s['phu'].to_numpy() / 100
-        dong = s['dong_duong'].to_numpy()
-        # Cạnh đang ĐÓNG: TomTom trả mức 0 (đo 30/10: 100% ô mức 0 ở đoạn có road_closure).
-        # Đóng đường không phải kẹt xe -> không tính vào r; ghi riêng tỉ lệ chiều dài bị đóng.
-        w = w_tong * ~dong
-        s = pd.DataFrame({'khung': s['khung'], 'doan': doan_cua[s['chi_so']], 'w': w, 'w_tong': w_tong,
-                          'w_dong': w_tong * dong,
+        s = pd.read_parquet(tep, columns=['khung', 'chi_so', 'muc', 'toc_do', 'phu', 'phu_dong'])
+        dai = dai_canh[s['chi_so']]
+        # Tầng bạc đã tách phần ĐÓNG (TomTom ghi mức 0, không phải kẹt) khỏi phần mở: muc chỉ
+        # từ phần mở, trọng số = dài × phu (mở); phần đóng chỉ vào ty_le_dong.
+        w = dai * s['phu'].to_numpy() / 100
+        w_dong = dai * s['phu_dong'].to_numpy() / 100
+        s = pd.DataFrame({'khung': s['khung'], 'doan': doan_cua[s['chi_so']], 'w': w, 'w_tong': w + w_dong,
+                          'w_dong': w_dong,
                           'rw': s['muc'].to_numpy() / 100 * w,
                           'kw': s['toc_do'].astype('float64').fillna(0).to_numpy() * w,
                           'kmask': w * s['toc_do'].notna().to_numpy()})

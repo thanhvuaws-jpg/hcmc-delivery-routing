@@ -34,7 +34,7 @@ def main():
     cong, khong_ghep = bo.ghep(doan)
     bang = bang_canh(cong)
     giay = time.time() - t0
-    da_ghep = sum(v[1] for v in cong.values())
+    da_ghep = sum(v[1] + v[2] for v in cong.values())
     print(f'Chup {luc:%H:%M}: {len(doan):,} doan TomTom -> {len(bang):,} canh, ghep {giay:.1f}s')
     print(f'Chieu dai mau TomTom ghep duoc: {100 * da_ghep / (da_ghep + khong_ghep):.1f}% '
           f'({da_ghep / 1000:.0f} km / {(da_ghep + khong_ghep) / 1000:.0f} km)')

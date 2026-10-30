@@ -18,8 +18,10 @@ nguồn trong khoảng ~1 phút, ghi vào chat_luong_ngay để làm mốc cho m
       muc         uint8     % tốc độ đường trống (r = muc / 100)
       toc_do      UInt8     km/h (kiểu absolute, chỉ có ở lần chụp AWS từ 30/10/2026 04:11;
                             TomTom làm tròn bước 5 km/h; trống nếu không có)
-      phu         uint8     % chiều dài cạnh có mẫu TomTom (0–100, cắt ở 100)
-      dong_duong  bool
+      phu         uint8     % chiều dài cạnh có mẫu TomTom ĐANG MỞ (0–100, cắt ở 100); muc chỉ tính
+                            từ phần này — phu = 0 nghĩa là cạnh chỉ có phần đóng, bỏ qua muc
+      phu_dong    uint8     % chiều dài cạnh thuộc đoạn ĐÓNG (TomTom road_closure, ghi mức 0)
+      dong_duong  bool      phu_dong > 0
       co          uint16    cờ chất lượng, bit (n-1) = Ln trong note/KE_HOACH_DU_LIEU.md
       nguon       'aws' | 'may'
   du_lieu/bac/khoang_trong.parquet      khung không có lần chụp nào (L6)
@@ -30,7 +32,7 @@ Cờ:
              |x − trung vị| > max(3 × 1,4826 × MAD, 15 điểm %). Ngưỡng sàn = nhiễu đo thật:
              hai bộ thu chụp cách nhau ~1 phút lệch nhau p95 = 13–14 điểm ban ngày (đo 30/10/2026,
              1,45 triệu cặp; ban đêm ~0) — dưới mức đó là dao động bình thường của nguồn (QĐ-009).
-  L7  bit 6  ghép kém: phu < 30%.
+  L7  bit 6  ghép kém: phu + phu_dong < 30%.
   L8  bit 7  ngày thuộc giai đoạn bất thường (COVID, quanh Tết) theo du_lieu/bac/lich.parquet.
   (L1 không áp: TomTom kiểu relative luôn trong 0–1. L2 trùng lặp xử lý ở mức khung.)
 
@@ -112,6 +114,7 @@ def ghep_mot(viec):
         kmh, _ = bo.ghep(doan_tu_zip(tep, 'absolute'))
         if kmh:
             k = np.fromiter(kmh.keys(), dtype=np.int64)
+            k = k[[kmh[i][1] > 0 for i in k]]                  # bỏ cạnh chỉ có phần đóng
             v = np.array([kmh[i][0] / kmh[i][1] for i in k])     # km/h trung bình theo chiều dài
             toc = pd.Series(np.clip(np.round(v), 0, 254).astype(np.uint8), index=k)
             bang['toc_do'] = pd.array(bang['chi_so'].map(toc), dtype='UInt8')
@@ -165,7 +168,10 @@ def co_hampel(df):
     ti, khung = pd.factorize(df['khung'], sort=True)
     ei, canh = pd.factorize(df['chi_so'], sort=True)
     M = np.full((len(khung), len(canh)), np.nan, dtype=np.float32)
-    M[ti, ei] = df['muc'].to_numpy()
+    muc = df['muc'].to_numpy().astype(np.float32)
+    if 'phu' in df:                                     # cạnh chỉ có phần đóng: muc vô nghĩa
+        muc[df['phu'].to_numpy() == 0] = np.nan
+    M[ti, ei] = muc
     lech = np.abs(M - trung_vi_truot(M))
     mad = trung_vi_truot(lech)
     with np.errstate(invalid='ignore'):
@@ -204,15 +210,17 @@ def xu_ly_ngay(ngay, khung, ex, dai_canh):
         bang['nguon'] = nguon
         phan.append(bang)
     df = pd.concat(phan, ignore_index=True)
-    df['phu'] = np.minimum(100, np.round(100 * df.pop('phu_m') / dai_canh[df['chi_so']])).astype(np.uint8)
+    dai = dai_canh[df['chi_so']]
+    df['phu'] = np.minimum(100, np.round(100 * df.pop('phu_m') / dai)).astype(np.uint8)
+    df['phu_dong'] = np.minimum(100, np.round(100 * df.pop('dong_m') / dai)).astype(np.uint8)
     df['co'] = np.uint16(0)
-    df.loc[df['phu'] < PHU_TOI_THIEU, 'co'] |= CO_L7
+    df.loc[df['phu'].astype(int) + df['phu_dong'] < PHU_TOI_THIEU, 'co'] |= CO_L7
     df.loc[co_hampel(df), 'co'] |= CO_L4
     if ngay_bat_thuong(ngay):
         df['co'] |= CO_L8
     df['co'] = df['co'].astype(np.uint16)
     df['nguon'] = pd.Categorical(df['nguon'], categories=['aws', 'may'])
-    df = df[['khung', 'chi_so', 'muc', 'toc_do', 'phu', 'dong_duong', 'co', 'nguon']].sort_values(
+    df = df[['khung', 'chi_so', 'muc', 'toc_do', 'phu', 'phu_dong', 'dong_duong', 'co', 'nguon']].sort_values(
         ['khung', 'chi_so'], ignore_index=True)
 
     # Nhiễu giữa hai nguồn ở các khung có cả hai.

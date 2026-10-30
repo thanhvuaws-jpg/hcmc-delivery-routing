@@ -78,6 +78,25 @@ class BoGhep:
         self.ma_do_thi = ma_do_thi  # dấu vân tay của đồ thị, ghi kèm dữ liệu đã ghép
 
     @classmethod
+    def tu_toa_do(cls, xy, ma_do_thi=''):
+        """Dựng chỉ mục lưới từ mảng cạnh (n, 4) mét: x1, y1, x2, y2. Không đọc/ghi tệp."""
+        xy = np.asarray(xy, dtype=float)
+        hg = np.array([huong(x2 - x1, y2 - y1) for x1, y1, x2, y2 in xy])
+        ox0 = np.floor((np.minimum(xy[:, 0], xy[:, 2]) - XA_TOI_DA_M) / O_LUOI_M).astype(np.int64)
+        ox1 = np.floor((np.maximum(xy[:, 0], xy[:, 2]) + XA_TOI_DA_M) / O_LUOI_M).astype(np.int64)
+        oy0 = np.floor((np.minimum(xy[:, 1], xy[:, 3]) - XA_TOI_DA_M) / O_LUOI_M).astype(np.int64)
+        oy1 = np.floor((np.maximum(xy[:, 1], xy[:, 3]) + XA_TOI_DA_M) / O_LUOI_M).astype(np.int64)
+        luoi = defaultdict(list)
+        for i in range(len(xy)):        # i tăng dần → danh sách mỗi ô tự sắp xếp
+            for ox in range(ox0[i], ox1[i] + 1):
+                for oy in range(oy0[i], oy1[i] + 1):
+                    luoi[_ma_o(ox, oy)].append(i)
+        khoa = np.array(sorted(luoi), dtype=np.int64)
+        dau = np.concatenate([[0], np.cumsum([len(luoi[k]) for k in khoa])]).astype(np.int64)
+        phang = np.concatenate([np.array(luoi[k], dtype=np.int32) for k in khoa])
+        return cls(xy, hg, khoa, dau, phang, ma_do_thi)
+
+    @classmethod
     def dung(cls):
         """Dựng chỉ mục từ đồ thị + ghi bảng cạnh cố định. Chạy lại mỗi khi dựng lại đồ thị."""
         import hashlib
@@ -86,28 +105,16 @@ class BoGhep:
             G = pickle.load(f)['G']
         ds = list(G.edges(data=True))
         xy = np.empty((len(ds), 4))
-        hg = np.empty(len(ds))
         for i, (u, v, _) in enumerate(ds):
             x1, y1 = sang_met(G.nodes[u]['y'], G.nodes[u]['x'])
             x2, y2 = sang_met(G.nodes[v]['y'], G.nodes[v]['x'])
             xy[i] = (x1, y1, x2, y2)
-            hg[i] = huong(x2 - x1, y2 - y1)
-        ox0 = np.floor((np.minimum(xy[:, 0], xy[:, 2]) - XA_TOI_DA_M) / O_LUOI_M).astype(np.int64)
-        ox1 = np.floor((np.maximum(xy[:, 0], xy[:, 2]) + XA_TOI_DA_M) / O_LUOI_M).astype(np.int64)
-        oy0 = np.floor((np.minimum(xy[:, 1], xy[:, 3]) - XA_TOI_DA_M) / O_LUOI_M).astype(np.int64)
-        oy1 = np.floor((np.maximum(xy[:, 1], xy[:, 3]) + XA_TOI_DA_M) / O_LUOI_M).astype(np.int64)
-        luoi = defaultdict(list)
-        for i in range(len(ds)):        # i tăng dần → danh sách mỗi ô tự sắp xếp
-            for ox in range(ox0[i], ox1[i] + 1):
-                for oy in range(oy0[i], oy1[i] + 1):
-                    luoi[_ma_o(ox, oy)].append(i)
-        khoa = np.array(sorted(luoi), dtype=np.int64)
-        dau = np.concatenate([[0], np.cumsum([len(luoi[k]) for k in khoa])]).astype(np.int64)
-        phang = np.concatenate([np.array(luoi[k], dtype=np.int32) for k in khoa])
         u = np.array([a for a, _, _ in ds], dtype=np.int64)
         v = np.array([b for _, b, _ in ds], dtype=np.int64)
         ma = hashlib.sha1(u.tobytes() + v.tobytes()).hexdigest()[:12]
-        bo = cls(xy, hg, khoa, dau, phang, ma)
+        bo = cls.tu_toa_do(xy, ma)
+        hg, khoa, dau, phang = bo.huong, bo.khoa, bo.dau, bo.phang
+
         def ghi_chi_muc(t):
             with open(t, 'wb') as f:
                 pickle.dump({'xy': xy, 'huong': hg, 'khoa': khoa, 'dau': dau, 'phang': phang,
@@ -186,7 +193,8 @@ class BoGhep:
     def ghep(self, doan):
         """
         doan: list {'diem': [(lat, lon), ...], 'tt': {traffic_level, traffic_road_coverage, road_closure}}
-        Trả về dict chỉ số cạnh -> [tổng mức × mét, tổng mét, đóng đường?], và số mét không ghép được.
+        Trả về dict chỉ số cạnh -> [tổng mức × mét (phần mở), mét mở, mét đóng], và số mét không
+        ghép được.
         """
         xs, ys, hs, mucs, dongs, hais = [], [], [], [], [], []
         for d in doan:
@@ -210,11 +218,15 @@ class BoGhep:
         muc, dong, hai = np.concatenate(mucs), np.concatenate(dongs), np.concatenate(hais)
         c = self._gan_nhat(x, y, hg, hai)
         ok = c >= 0
+        # Mẫu thuộc đoạn ĐÓNG (road_closure) TomTom ghi mức 0 — không phải kẹt. Tách riêng: mức
+        # của cạnh chỉ tính từ phần MỞ, phần đóng chỉ đếm mét (30/10/2026: 32% cạnh có cờ đóng
+        # thật ra chỉ đóng một phần, trộn chung làm mức bị kéo xuống).
+        mo, dg = ok & ~dong, ok & dong
         n = len(self.xy)
-        tong = np.bincount(c[ok], weights=muc[ok] * BUOC_M, minlength=n)
-        met = np.bincount(c[ok], minlength=n) * BUOC_M
-        bi_dong = np.bincount(c[ok], weights=dong[ok], minlength=n) > 0
-        cong = {int(i): [float(tong[i]), float(met[i]), bool(bi_dong[i])] for i in np.nonzero(met)[0]}
+        tong = np.bincount(c[mo], weights=muc[mo] * BUOC_M, minlength=n)
+        met = np.bincount(c[mo], minlength=n) * BUOC_M
+        met_dong = np.bincount(c[dg], minlength=n) * BUOC_M
+        cong = {int(i): [float(tong[i]), float(met[i]), float(met_dong[i])] for i in np.nonzero(met + met_dong)[0]}
         return cong, float(BUOC_M * (~ok).sum())
 
 
@@ -229,18 +241,26 @@ def doan_tu_tho(df):
 
 
 def bang_canh(cong):
-    """dict ghép -> DataFrame gọn để lưu: chi_so (int32), muc (uint8, %), phu_m (uint16), dong_duong."""
+    """
+    dict ghép -> DataFrame gọn để lưu:
+      chi_so (int32), muc (uint8, % — chỉ từ phần MỞ; 0 nếu cạnh đóng hết, xem phu_m),
+      phu_m (uint16, mét MỞ có mẫu), dong_m (uint16, mét ĐÓNG có mẫu), dong_duong (dong_m > 0).
+    """
     import pandas as pd
     if not cong:
         return pd.DataFrame({'chi_so': pd.Series(dtype='int32'), 'muc': pd.Series(dtype='uint8'),
-                             'phu_m': pd.Series(dtype='uint16'), 'dong_duong': pd.Series(dtype='bool')})
+                             'phu_m': pd.Series(dtype='uint16'), 'dong_m': pd.Series(dtype='uint16'),
+                             'dong_duong': pd.Series(dtype='bool')})
     k = np.fromiter(cong.keys(), dtype=np.int32)
-    v = np.array(list(cong.values()), dtype=object)
-    tong, met = v[:, 0].astype(float), v[:, 1].astype(float)
+    v = np.array(list(cong.values()), dtype=float)
+    tong, met, dong = v[:, 0], v[:, 1], v[:, 2]
+    with np.errstate(invalid='ignore', divide='ignore'):
+        muc = np.where(met > 0, np.round(100 * tong / np.where(met > 0, met, 1)), 0)
     df = pd.DataFrame({
         'chi_so': k,
-        'muc': np.clip(np.round(100 * tong / met), 0, 100).astype(np.uint8),
+        'muc': np.clip(muc, 0, 100).astype(np.uint8),
         'phu_m': np.minimum(met, 65535).astype(np.uint16),
-        'dong_duong': v[:, 2].astype(bool),
+        'dong_m': np.minimum(dong, 65535).astype(np.uint16),
+        'dong_duong': dong > 0,
     })
     return df.sort_values('chi_so', ignore_index=True)

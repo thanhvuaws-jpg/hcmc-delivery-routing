@@ -78,7 +78,9 @@ def main():
         chuoi, da = [(u, v)], {chi_so[(u, v)]}
         while v in giua[chinh]:
             tiep = [w for w in ke(v, chinh)[1] if w != u]
-            if len(tiep) != 1 or chi_so[(v, tiep[0])] in da:
+            # Dừng trước cạnh đã thuộc đoạn khác: không đi tiếp thì không ghi đè đoạn cũ
+            # (30/10/2026: thiếu điều kiện này làm 3 đoạn mất cạnh đầu — kiem_du_lieu.py bắt được).
+            if len(tiep) != 1 or chi_so[(v, tiep[0])] in da or da_dung[chi_so[(v, tiep[0])]]:
                 break
             u, v = v, tiep[0]
             chuoi.append((u, v))

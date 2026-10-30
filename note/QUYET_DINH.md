@@ -65,3 +65,20 @@ Mỗi quyết định ghi: ngày, nội dung, lý do, phương án đã bỏ. Mu
 - **Nội dung:** `HAMPEL_SAN` 10 → 15 điểm (≥ p95 ban ngày). Dưới mức đó là dao động bình thường của nguồn, không gọi là bất thường.
 - **Kết quả:** L4 ngày 29/10 giảm 5,8% → 4,6%; ngày 30/10 3,6% → 2,9%.
 - **Đã bỏ:** ngưỡng theo giờ (phức tạp hơn mà chưa cần); giữ 10 điểm (gắn cờ nhầm dao động bình thường ban ngày).
+
+## QĐ-010 — Tách phần đường ĐÓNG khỏi mức kẹt ngay ở bộ ghép (30/10/2026)
+
+- **Nội dung:**
+  - `BoGhep.ghep` trả [tổng mức × mét phần MỞ, mét mở, mét đóng].
+  - `bang_canh` có thêm `dong_m`; `muc` chỉ tính từ phần mở.
+  - Tầng bạc thêm cột `phu_dong` (% chiều dài thuộc đoạn đóng); `phu` giờ chỉ là phần mở.
+  - Tầng vàng lấy trọng số dài × phu (mở), `ty_le_dong` từ `phu_dong`. Hampel bỏ qua cạnh chỉ có phần đóng.
+- **Lý do:**
+  - TomTom ghi mức 0 cho đoạn `road_closure`; đó không phải kẹt.
+  - Ngày 30/10, 32% cạnh có cờ đóng thật ra chỉ đóng MỘT PHẦN. Mức bị trộn số 0 nên kéo xuống (TB 12, max 67).
+  - Bản trước (bỏ cả cạnh có cờ đóng ở tầng vàng) làm mất phần mở còn đo được.
+- **Kiểm:**
+  - test `test_phan_dong_tach_khoi_muc`: nửa đóng + nửa mở mức 0,8 → cạnh 80, không phải 40.
+  - `kiem_tra_ghep_nhanh.py` ĐẠT (bản tham chiếu từng điểm sửa cùng ngữ nghĩa).
+  - `kiem_du_lieu.py` 50/50.
+- **Đã bỏ:** gắn cờ ở cạnh rồi lọc ở tầng vàng (mất dữ liệu phần mở); để nguyên (mô hình học "kẹt cứng" trên đường đóng).
