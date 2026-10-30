@@ -82,3 +82,31 @@ Mỗi quyết định ghi: ngày, nội dung, lý do, phương án đã bỏ. Mu
   - `kiem_tra_ghep_nhanh.py` ĐẠT (bản tham chiếu từng điểm sửa cùng ngữ nghĩa).
   - `kiem_du_lieu.py` 50/50.
 - **Đã bỏ:** gắn cờ ở cạnh rồi lọc ở tầng vàng (mất dữ liệu phần mở); để nguyên (mô hình học "kẹt cứng" trên đường đóng).
+
+## QĐ-011 — Định tuyến 3 phương án theo thời điểm (30/10/2026)
+
+- **Mô hình tốc độ** (`dinh_tuyen/mo_hinh_toc_do.py`): v(cạnh, giờ) = v_trống(cạnh) × r(cạnh, giờ).
+  - v_trống: đo thật (`xu_ly/toc_do_canh.py`); không có thì trung vị loại đường, rồi bảng đoán `TOC_DO`.
+  - r: TB điều hòa các lần chụp của CẠNH trong giờ đó (≥ 3 lần); không đủ thì r loại đường × giờ; hẻm/service lấy residential.
+  - **Giờ chưa có dữ liệu KHÔNG coi là đường trống**: lấy TB các giờ cùng nhóm (6–21h / đêm), in cảnh báo.
+  - Giờ xuất phát cách lần chụp mới nhất ≤ 30 phút: 30 phút đầu chuyến dùng r đo thật.
+  - Lần chụp mới nhất: cạnh đóng hết → CẤM; đóng một phần → thời gian × (1 + phần đóng).
+- **3 phương án** (`dinh_tuyen/ba_phuong_an.py`):
+  - ngắn nhất (mét);
+  - nhanh nhất (giây, thời gian phụ thuộc GIỜ XE TỚI cạnh);
+  - tối ưu = thời gian × (1 + 0,5 × max(0; 0,75 − r)/0,75) + phạt ngập (mưa ≥ 5 mm/h: 600 s/cạnh dễ ngập do mưa; 1–5: 180 s; triều cường bật tay: 600 s).
+  - Cả 3 cấm đường đóng, giữ luật một chiều / cấm rẽ / cấm xe máy. Kết quả chấm lại bằng cùng thước đo thời gian (không phạt).
+- **Tăng tốc A\*:** danh sách kề tính sẵn, mét phẳng × 0,995 (cận dưới), cận v_max trong 3 giờ tới, bảng giây/cạnh theo giờ dạng list, **ALT 8 mốc** (cận dưới = thời gian đường trống, hợp lệ vì r ≤ 1).
+  - Kết quả: 3h 41.921 → 1.801 nút; 8h 58.537 → 21.734 nút.
+  - Kiểm: có/không ALT cùng chi phí 20/20.
+- **Kiểm** (`dinh_tuyen/kiem_tra_tuan7.py`, ĐẠT):
+  - 90 cặp × (3h, 8h): 0 lỗi luật, 0 cạnh đóng; 3 tuyến TB 0,15 / 0,41 s, chậm nhất 1,53 s (< 2 s).
+  - 8h: nhanh nhất tiết kiệm TB 4,5 phút (17,8%), tối đa 15,4 phút, nhanh hơn ở 97% cặp. Cạnh kẹt nặng 12,0 → 9,3 (tối ưu).
+  - Mưa to: 14/14 cặp né được, hoặc không thể né hợp lý (cầu Bà Tàng: cấm hẳn cạnh ngập thì không còn đường).
+- **Giới hạn ghi rõ:**
+  - số "tiết kiệm" là theo MÔ HÌNH tốc độ, chưa chấm bằng tốc độ thật quan sát sau đó (tuần 10);
+  - giờ 12–18 hiện đang ước lượng (dữ liệu từ 29/10 19:00);
+  - chưa có phạt rẽ trái qua trục lớn.
+- **Đã bỏ:**
+  - tốc độ cố định theo loại đường: không thấy kẹt từng đoạn, tối ưu không né đúng chỗ;
+  - coi giờ thiếu dữ liệu là đường trống: sai cao điểm chiều.

@@ -4,6 +4,48 @@ Mục mới nhất ở trên cùng.
 
 > 30/10/2026 11:53: các mục trong ngày từng ghi giờ ước chừng (13:00, 14:30…) — SAI, đồng hồ thật khi đó chưa tới 12:00. Đã sửa: chỉ ghi giờ có bằng chứng (giờ tệp, lệnh `date`, giờ trên AWS).
 
+## 30/10/2026 (xong 12:38) — định tuyến 3 phương án theo thời điểm (tuần 7)
+
+- QĐ-011. Tệp:
+  - `dinh_tuyen/mo_hinh_toc_do.py`, `dinh_tuyen/ba_phuong_an.py`, `dinh_tuyen/kiem_tra_tuan7.py`;
+  - `tim_duong.py`: thêm `chi_phi` theo thời điểm, `uoc_luong_them` (ALT), danh sách kề tính sẵn. Tuần 1 vẫn ĐẠT, 59 ms/tuyến.
+- Ví dụ Bến Thành → Lăng Cha Cả:
+  - 8h: ngắn nhất 5.434 m / 23,4 phút; nhanh nhất 6.024 m / 20,2 phút; tối ưu 6.343 m / 20,2 phút (luồn hẻm 168, 181 Võ Văn Tần / CMT8).
+  - 3h: 12,1 vs 11,6 phút.
+- Lỗi tự bắt: giờ chưa có dữ liệu (12–18) lúc đầu bị coi r = 1 → 12h, 18h ra 34 km/h. Đã sửa (QĐ-011).
+- Khởi động `DinhTuyen.nap()` ~15 s (ALT 16 lần Dijkstra + mô hình tốc độ). Máy chủ API chỉ nạp 1 lần.
+- `kiem_tra_tuan7.py` ĐẠT (số liệu ở QĐ-011). KE_HOACH tuần 7: lõi xong; còn tuyến thay thế (k tuyến), phạt rẽ trái, đánh giá bằng tốc độ thật (tuần 10).
+
+## 30/10/2026 (xong 12:09) — bảng theo dõi hai bộ thu (ứng dụng cửa sổ)
+
+- Người dùng muốn xem trực quan thay vì mở web AWS: `he_thong/bang_theo_doi/`:
+  - `bang_theo_doi.pyw` (Tkinter + matplotlib, chủ đề tối, tự làm mới 60 s, đọc ở luồng phụ);
+  - `nguon_may.py`: nhật ký bộ thu + `schtasks` + dung lượng hôm nay;
+  - `nguon_aws.py`: CloudWatch Logs qua AWS CLI, profile chỉ-đọc, không cần boto3;
+  - `MO_BANG_THEO_DOI.bat`; lối tắt Desktop "Theo doi thu du lieu".
+- Mỗi tab có:
+  - đèn trạng thái (≤ 7 phút xanh, ≤ 15 vàng, hơn nữa đỏ);
+  - 6 ô số: lượt, % thành công, lượt lỗi, request TomTom, MB thu, giây/lượt;
+  - 2 biểu đồ 24 giờ: giây/lượt + chấm lỗi, số sự cố;
+  - bảng 40 lượt gần nhất (lỗi tô đỏ).
+- Thanh trên: hạn mức TomTom hôm nay cộng 2 bộ thu (ô / 50.000, lượt sự cố / 2.500).
+- Số kiểu VN (4.526; 99,3%). Mã kết quả tác vụ dịch chữ (267009 = đang chạy).
+- Thử: chạy app, tự chụp 2 tab bằng PIL rồi đóng.
+  - Tab máy: 146 lượt hôm nay, 99,3% (1 lượt lỗi: ô 13049,7700 TomTom quá giờ lúc 07:48), TB 24,3 s.
+  - Tab AWS: lúc đầu báo "chưa có quyền đọc log". Người dùng bấm Create policy, sau đó đọc được ngay (4,9 s / 24 giờ log):
+    - 147 lượt / 24 h, hôm nay 146, 0 lỗi;
+    - TB 7,0 s (4,3–12,1), RAM tối đa 108/256 MB, 29,5 MB lên S3;
+    - thời gian lượt tăng ~4,5 → ~8 s từ 04:11 (thêm ô absolute).
+  - Hạn mức TomTom hôm nay (hai bộ thu, tới 12:10): ô 11.640/50.000 (23%), lượt sự cố 292/2.500 (12%).
+- Chưa phải .exe thật: cần PyInstaller (pip từng bị chặn) — người dùng tự cài nếu muốn đóng gói.
+- Theo yêu cầu người dùng: tab Máy nhà có nút **Dừng thu / Bắt đầu thu / Chạy 1 lượt ngay**.
+  - Gọi `schtasks /Change /DISABLE|/ENABLE` và `/Run`: không xóa tác vụ, không đụng dữ liệu.
+  - Dừng phải bấm 2 lần trong 5 giây. Nút tự bật/mờ theo trạng thái tác vụ (Scheduled Task State).
+  - Đèn vàng "ĐÃ DỪNG" khi tác vụ tắt.
+  - Claude KHÔNG tự bấm thử (sẽ dừng bộ thu thật). Đã chụp: nút hiện đúng (Bắt đầu mờ vì tác vụ đang bật).
+  - Tab AWS không có nút: profile chỉ-đọc, muốn dừng AWS thì vào EventBridge Scheduler (CAN_NHO).
+
+
 ## 30/10/2026 (xong lúc 11:53) — tốc độ thật cho định tuyến
 
 - `xu_ly/toc_do_canh.py` → `bac/toc_do_canh.parquet`, `bac/toc_do_ho_so.parquet`.

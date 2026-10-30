@@ -49,7 +49,8 @@ dinh_tuyen/   đồ thị xe máy có luật + tìm đường (A* có luật c�
 xu_ly/        tầng bạc (bac_*.py, lich, canh_tinh, doan_duong) và tầng vàng (vang.py)
 khai_pha/     khai phá dữ liệu M1–M9 (m1_mo_ta.py, m2_diem_nong.py…), kết quả ở ket_qua/
 mo_hinh/      dự báo ùn tắc: mốc so sánh + mô hình (moc_so_sanh.py), kết quả ở ket_qua/
-he_thong/     API + web bản đồ + hạ tầng AWS (tuần 8–9)
+kiem_thu/     test đơn vị (pytest) + kiem_du_lieu.py (bất biến trên dữ liệu thật)
+he_thong/     aws/thu_lambda (bộ thu AWS), bang_theo_doi (ứng dụng theo dõi 2 bộ thu); API + web (tuần 8–9)
 danh_gia/     đánh giá offline + chạy thử ảo (tuần 10–11)
 du_lieu/      dữ liệu — KHÔNG đưa lên git (đồng: tomtom/, s3/, thoi_tiet*/… ; bac/ ; vang/)
 note/         sổ ghi chú: kế hoạch, quyết định, nhật ký, điều cần nhớ

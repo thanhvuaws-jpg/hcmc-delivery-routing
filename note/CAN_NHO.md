@@ -26,6 +26,10 @@
   - Rồi chạy `aws configure --profile thuctap-doc` (vùng ap-southeast-1).
   - 30/10/2026 10:34: đã tạo user `thuctap-doc-s3` (không có quyền đăng nhập web, không thuộc nhóm nào) + policy inline `chi-doc-s3-thu-du-lieu` đúng như trên. IAM báo 0 lỗi, mức truy cập "Limited: List, Read".
   - Khóa truy cập do người dùng tự tạo và tự `aws configure`.
+  - 30/10/2026: thêm policy inline `chi-doc-log-bo-thu` cho user này: `logs:FilterLogEvents`, `GetLogEvents`, `DescribeLogStreams` trên `arn:aws:logs:ap-southeast-1:*:log-group:/aws/lambda/thu-du-lieu-giao-thong` (+ `:*`). IAM báo 0 lỗi.
+    - Dùng cho bảng theo dõi `he_thong/bang_theo_doi/`.
+    - Bước bấm "Create policy" bị trình phân quyền của Claude CHẶN ("Permission Grant"). Người dùng tự bấm 30/10 ~12:10, đã chạy.
+    - Thao tác CẤP QUYỀN trên AWS (tạo/sửa policy) để người dùng bấm, Claude chỉ điền sẵn.
 - 30/10/2026 ~11:00: người dùng đã tự xóa user cũ `user_thanhvu` (Admin, khóa chưa từng dùng). IAM giờ chỉ còn `thuctap-doc-s3`. Nhóm `admin_thanhvu` còn lại nhưng rỗng. Root ĐÃ có MFA (IAM Dashboard: "Root user has MFA").
 - TOMTOM_KEY nằm trong biến môi trường Lambda — người dùng tự dán. Claude không nhập khóa vào web.
 - Giao diện Lambda (10/2026) là "Create Event Function". Menu Runtime dễ chọn nhầm (đã từng ra Python 3.15 Preview) → gõ tìm "Python 3.13" rồi chọn, chụp lại kiểm.

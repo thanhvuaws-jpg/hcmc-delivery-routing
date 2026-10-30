@@ -17,8 +17,8 @@ Lập ngày 29/10/2026. Làm tại nhà, 3 tháng, **chỉ có một máy tính,
 | 4 | 3 mức kẹt, thời tiết + sự cố theo cạnh, điểm ngập, bảng huấn luyện, EDA | ✅ tầng bạc/vàng, D8 (30 điểm ngập), M1, M2, tốc độ thật. ⏳ EDA theo thứ / khi mưa (cần thêm ngày) |
 | 5 | Baseline lịch sử + LightGBM, chia theo thời gian, METR-LA | ✅ đường ống + mốc giữ nguyên. ⏳ baseline lịch sử + đánh giá thật (cần ≥ 7–14 ngày). ⬜ METR-LA |
 | 6 | LSTM/GRU, ablation | ⬜ |
-| 7 | Định tuyến theo thời điểm, 3 phương án | 🔶 đã có tốc độ loại đường × giờ + tốc độ đường trống từng cạnh; ⬜ trọng số theo thời điểm, 3 phương án, tuyến thay thế |
-| 8–13 | API + web, AWS phục vụ, đánh giá, chạy thử ảo, báo cáo | ⬜ |
+| 7 | Định tuyến theo thời điểm, 3 phương án | ✅ 30/10: 3 phương án theo giờ xe tới cạnh, cấm đường đóng, phạt ngập khi mưa, ALT; kiem_tra_tuan7 ĐẠT (< 2 s, 0 lỗi luật, 8h nhanh hơn ngắn nhất 17,8%). ⬜ tuyến thay thế, phạt rẽ trái |
+| 8–13 | API + web, AWS phục vụ, đánh giá, chạy thử ảo, báo cáo | ⬜ (bảng theo dõi 2 bộ thu đã có: `he_thong/bang_theo_doi/`) |
 
 Ngoài kế hoạch gốc đã làm thêm: D11 Kaggle, D13 Zenodo, D14 lịch, D15 km/h, D16 POI; kiểm thử tự động (34 test + 50 bất biến); repo GitHub công khai.
 **Nút thắt:** phần lớn việc tuần 4–6 cần dữ liệu tích lũy nhiều ngày (thứ trong tuần, mưa, "hôm qua/tuần trước").
