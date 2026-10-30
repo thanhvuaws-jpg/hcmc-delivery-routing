@@ -6,6 +6,23 @@ Lập ngày 29/10/2026. Làm tại nhà, 3 tháng, **chỉ có một máy tính,
 
 > 29/10/2026: **bỏ camera** (QĐ-004). Nguồn kẹt xe = TomTom Flow; tín hiệu báo sớm = TomTom Incidents. Các mục nhắc tới camera bên dưới đã được thay.
 
+## Tiến độ tổng (cập nhật 30/10/2026, trước tuần 1)
+
+| Tuần | Nội dung | Trạng thái |
+|---|---|---|
+| 0 | AWS: Bills, Budgets, IAM, tắt tài nguyên thừa; khóa TomTom | ✅ Budgets 2 USD (email đã xác minh); IAM chỉ-đọc; xóa snapshot RDS + user Admin cũ; root đã có MFA. ⬜ thầy duyệt tên đề tài (người dùng) |
+| 1 | Đồ thị xe máy có luật + tìm đường; đề cương | ✅ đồ thị 350.839 cạnh (vùng 30 ô TomTom), 90/90 tuyến 0 lỗi luật. ⬜ đề cương (người dùng bảo chưa viết) |
+| 2 | Bộ thu chạy liên tục, lưu Parquet, đẩy S3 | ✅ máy (Task Scheduler) + **AWS Lambda 24/7 lên S3** (làm sớm, thay "tuần 9"); km/h từ 30/10 04:11. ⏳ mốc "72 giờ liền" (từ 29/10 18:57) |
+| 3 | Ghép TomTom + sự cố vào cạnh | ✅ 95,8% mẫu; sự cố 97%; bộ ghép numpy 0,7 s/lần chụp. ⬜ kiểm tay 30 đoạn |
+| 4 | 3 mức kẹt, thời tiết + sự cố theo cạnh, điểm ngập, bảng huấn luyện, EDA | ✅ tầng bạc/vàng, D8 (30 điểm ngập), M1, M2, tốc độ thật. ⏳ EDA theo thứ / khi mưa (cần thêm ngày) |
+| 5 | Baseline lịch sử + LightGBM, chia theo thời gian, METR-LA | ✅ đường ống + mốc giữ nguyên. ⏳ baseline lịch sử + đánh giá thật (cần ≥ 7–14 ngày). ⬜ METR-LA |
+| 6 | LSTM/GRU, ablation | ⬜ |
+| 7 | Định tuyến theo thời điểm, 3 phương án | 🔶 đã có tốc độ loại đường × giờ + tốc độ đường trống từng cạnh; ⬜ trọng số theo thời điểm, 3 phương án, tuyến thay thế |
+| 8–13 | API + web, AWS phục vụ, đánh giá, chạy thử ảo, báo cáo | ⬜ |
+
+Ngoài kế hoạch gốc đã làm thêm: D11 Kaggle, D13 Zenodo, D14 lịch, D15 km/h, D16 POI; kiểm thử tự động (34 test + 50 bất biến); repo GitHub công khai.
+**Nút thắt:** phần lớn việc tuần 4–6 cần dữ liệu tích lũy nhiều ngày (thứ trong tuần, mưa, "hôm qua/tuần trước").
+
 ---
 
 ## 1. Mục tiêu và phạm vi
