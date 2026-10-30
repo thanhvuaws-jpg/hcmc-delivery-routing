@@ -1,0 +1,18 @@
+# Dữ liệu tải/thu về: nặng, có thể chứa hình ảnh người và biển số — không đưa lên git.
+du_lieu/
+
+# Khóa API (TomTom, AWS…) chỉ nằm ở máy.
+.env
+*.pem
+.aws/
+
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# Kết quả vẽ/tính từ dữ liệu TomTom (khóa Evaluation không cho phát tán lại nội dung TomTom):
+# chỉ để ở máy, chạy lại script là có. Bộ đóng gói Lambda cũng tạo lại được.
+khai_pha/ket_qua/
+mo_hinh/ket_qua/
+dinh_tuyen/ket_qua/tuan3_ket_xe.png
+he_thong/aws/thu_lambda/dist/

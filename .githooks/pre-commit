@@ -1,0 +1,4 @@
+#!/bin/sh
+# Chot chan bi mat (xem .githooks/chan_bi_mat.py). Kich hoat: git config core.hooksPath .githooks
+command -v python >/dev/null 2>&1 || { echo "Thieu Python — chot chan bi mat khong chay duoc, chan commit." >&2; exit 1; }
+exec python "$(git rev-parse --show-toplevel)/.githooks/chan_bi_mat.py"

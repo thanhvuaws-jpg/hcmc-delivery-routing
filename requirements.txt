@@ -1,0 +1,13 @@
+# Thư viện đang dùng (đã có sẵn trên máy, 29/10/2026). Không cần gói đọc ô bản đồ
+# vector: thu_thap/mvt.py tự đọc.
+requests>=2.32
+pandas>=3.0
+pyarrow>=25
+numpy>=2.5
+networkx>=3.6
+matplotlib>=3.11
+# Dùng từ tuần 5 (mô hình): scikit-learn, torch (CUDA, GTX 1650)
+scikit-learn>=1.9
+torch>=2.6
+# Dùng từ tuần 8 (API): fastapi
+fastapi>=0.141
