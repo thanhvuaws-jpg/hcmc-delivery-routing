@@ -4,6 +4,16 @@ Mục mới nhất ở trên cùng.
 
 > 30/10/2026 11:53: các mục trong ngày từng ghi giờ ước chừng (13:00, 14:30…) — SAI, đồng hồ thật khi đó chưa tới 12:00. Đã sửa: chỉ ghi giờ có bằng chứng (giờ tệp, lệnh `date`, giờ trên AWS).
 
+## 07/11/2026 (00:15 → 00:40) — khai phá M3, M5, M8, M9 và phép thử "có đoán mò không" (QĐ-021)
+
+- Người dùng báo: thầy đã đồng ý đề tài. Người dùng lo "làm xong hóa ra đoán mò" → viết `mo_hinh/kiem_doan_mo.py`.
+- Mới: `khai_pha/m3_phan_cum.py`, `m5_lan_ket.py` (`--bo-chung`), `m8_doi_chieu.py`, `m9_tuyen_ngan_ket.py`.
+- Kéo S3 00:15 + dựng lại bạc, vàng, tốc độ cạnh (dữ liệu tới 07/11 00:15).
+- Kết quả ở QĐ-021. Chính: mô hình thật đúng hướng 87–93% khi đường đổi mạnh (đoán TB 72–75%, nhãn xáo trộn 46–49%).
+- M5 KHÔNG đo được tốc độ lan với lấy mẫu 5 phút — ghi nhận thẳng, đừng báo cáo con số phút/km.
+- Lỗi của mình: M5 float32 không ghi được JSON; M9 tốc độ đường trống thiếu ra NaN → lấy tốc độ đồ thị. Đã sửa.
+- Việc tiếp: lần train chính ~12–13/11, thêm đặc trưng trạng thái chung toàn mạng, sự cố / thời tiết cho Graph WaveNet. Chưa đẩy GitHub.
+
 ## 06/11/2026 (20:25 → 23:32) — train thật lần 1 trên dữ liệu TP.HCM (QĐ-020)
 
 - S3: 2.263 lần chụp từ 29/10 23:57, 0 khung hụt. Tầng bạc + vàng dựng lại, `kiem_du_lieu.py` 176/176 ĐẠT.

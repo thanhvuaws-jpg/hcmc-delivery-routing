@@ -321,7 +321,7 @@ Mỗi quyết định ghi: ngày, nội dung, lý do, phương án đã bỏ. Mu
   - "Hybrid Cloud" — dễ bị hỏi vặn; tính lai (AWS + VPS + máy nhà) giải thích trong báo cáo;
   - "thông minh" — chung chung;
   - "trên đồ thị" — chi tiết kỹ thuật, để trong báo cáo cho tên đỡ dài.
-- **Còn phải:** người dùng gửi thầy duyệt (thầy đã thấy bản có camera — `note/Y_TUONG.md`). Thầy sửa thì ghi QĐ mới.
+- **Thầy đã đồng ý** (người dùng báo 07/11/2026: "thầy bảo ok rồi đề tài có độ phức tạp rất tốt và có thể yên tâm làm"). Thầy sửa tên thì ghi QĐ mới.
 
 ## QĐ-020 — Đưa hồ sơ lịch sử vào mô hình dự báo; kết quả train thật lần 1 (06/11/2026)
 
@@ -355,3 +355,44 @@ Mỗi quyết định ghi: ngày, nội dung, lý do, phương án đã bỏ. Mu
   - dừng sớm của học sâu dựa trên 54 khung kiểm định, phần lớn là đêm (kiểm định 5,10 so với kiểm tra 6,24–6,73). Đã sửa: từ lần sau ít nhất 96 khung.
 - **Lần chính ~12–13/11:** train lại đủ 4 mô hình + GRU có hồ sơ; thêm sự cố / thời tiết vào Graph WaveNet để so công bằng; ablation sự cố / thời tiết.
 - **Đã bỏ:** tính hồ sơ không loại chính khung (rò nhãn); dùng hẳn đúng thứ khi mới một tuần (mỗi thứ chỉ 1 ngày, trùng chính nhãn).
+
+## QĐ-021 — Kết quả khai phá đợt 1 (M3, M5, M8, M9) và phép thử "có đoán mò không" (07/11/2026)
+
+Dữ liệu tới 07/11 00:15. Script ở `khai_pha/`, `mo_hinh/kiem_doan_mo.py`; bảng + hình ở `ket_qua/` (không lên git).
+
+- **Phép thử đoán mò** (`kiem_doan_mo.py`, cùng tập kiểm tra, học trên mẫu 800 nghìn dòng; 15 | 30 | 60 phút):
+
+  | cách | MAE | đúng 3 mức | F1 mức kẹt | đúng hướng khi đổi ≥ 15 điểm |
+  |---|---|---|---|---|
+  | đoán mò: luôn đoán TB | 20,25 · 20,25 · 20,26 | ~51% | 0,000 | 72–75% |
+  | đoán mò: bốc ngẫu nhiên | 25,1 | ~46% | ~0,06 | 60–61% |
+  | giữ nguyên | 6,48 · 8,34 · 9,89 | 83,8 · 79,4 · 75,9% | 0,636 · 0,542 · 0,478 | 0% |
+  | học trên nhãn XÁO TRỘN | 6,48 · 8,34 · 9,89 | 83,8 · 79,4 · 75,8% | 0,637 · 0,542 · 0,478 | 46–49% |
+  | **mô hình thật** (GBM + hồ sơ) | **5,71 · 6,46 · 6,63** | **86,3 · 84,7 · 84,4%** | **0,649 · 0,601 · 0,581** | **87 · 91 · 93%** |
+
+  - Nhãn xáo trộn → tụt về đúng mức "giữ nguyên": cách chấm không tự tạo ra điểm, phần hơn của mô hình thật là học được thật.
+  - Đoán mò về hướng KHÔNG phải 50%: đường đổi mạnh thường là đang quay về mức thường, nên đoán TB đã đúng 72–75%. Phải so 87–93% với mức này.
+  - Học 800 nghìn dòng ra gần y như 3,9 triệu dòng (5,71 so với 5,72): số không phụ thuộc mẫu.
+  - Chưa chứng minh được: tuần sau còn đúng không, mưa to thì sao. Cần chạy lại nhiều tuần.
+- **M3 — nhóm đường** (6 ngày thường, 7.176 đoạn):
+  - Theo mức, 3 nhóm, ổn định (ARI 0,84, silhouette 0,33): thông thoáng 28,5% km (kẹt TB ban ngày 11%), vừa 42,5% (31%), nặng 29% (50%). Cả ba đều đỉnh 17:30.
+  - Theo dạng, 2 nhóm nhưng ranh giới MỜ (silhouette 0,18, ARI 0,61): hai đỉnh sáng + chiều 38% km, nặng về chiều 62%. Không có nhóm chỉ kẹt sáng như dự kiến.
+  - Bỏ DTW: nó kéo đỉnh sáng khớp đỉnh chiều, ngược mục đích.
+- **M5 — kẹt lan** (5 phút, cặp cùng tuyến ≤ 4 km, phần dư sau khi trừ nhịp ngày):
+  - **KHÔNG đo được tốc độ lan.** Đỉnh tương quan ở độ trễ ~0 mọi khoảng cách; độ dốc +0,10 phút/km (trừ biến động chung +0,24, CI +0,11..+0,46) tương đương > 250 km/h, không phải tốc độ vật lý → lấy mẫu 5 phút quá thưa để thấy, không nên ghi là "tốc độ lan".
+  - Biến động CHUNG toàn mạng chiếm phần lớn: tương quan ở 3,5–4 km 0,38 → 0,08 sau khi trừ. Còn lại chỉ mạnh trong ~1 km (0,50 ở < 0,5 km; 0,20 ở 0,5–1 km; 0,14 ở 1–2 km).
+  - Granger sau khi trừ (3.000 cặp 0,5–2 km): chỉ thượng nguồn báo trước 18,4%, chỉ hạ nguồn 12,0%, cả hai 23,5%, không chiều nào 46%. Không có chiều áp đảo.
+  - Dùng được: lân cận chỉ cần tầm ~1 km; nên thêm đặc trưng **trạng thái chung toàn mạng** cho mô hình ở lần train chính.
+- **M8 — đối chiếu Index 2025** (7 ngày 31/10–06/11, cân theo chiều dài): mức kẹt 24 giờ 38–45%, 6–22 giờ 53–63% (Index 46,9%, nằm giữa); chiều 17–19h 15,6–16,0 km/h (Index 14,8); 10 km ban ngày 28–30 phút (Index 31,9). Tốc độ cao hơn 5–14%: khác vùng, khác cách cân, ô tô 2025. Số Index lấy từ note 29/10, trang TP.HCM không mở lại được 07/11.
+- **M9 — tuyến ngắn nhất dính kẹt** (500 tuyến giữa điểm giao hàng thật, TB 7,1 km; 69% chiều dài có số đo; 2.367 lần chụp):
+
+  | ngày thường | ≥ 200 m kẹt nặng | ≥ 1 km kẹt nặng | % dài đông | thời gian so với đường trống |
+  |---|---|---|---|---|
+  | 17h | 89% | 56% | 83% | +147% |
+  | 7–8h | 74–77% | 34% | 71% | +101..104% |
+  | 13h | 54% | 13% | 62% | +71% |
+  | 1–4h | ~1–2% | 0% | 1–2% | +1–2% |
+
+  - Cuối tuần nhẹ hơn hẳn: đỉnh 39% (≥ 200 m), 10% (≥ 1 km) lúc 18h; mới một cuối tuần trọn.
+  - ~5–6% tuyến ngắn nhất đi qua đường đang đóng, gần như mọi giờ (đóng dài ngày).
+  - Chỉ tính trên phần có số đo; thời gian +147% là trên phần đó.
