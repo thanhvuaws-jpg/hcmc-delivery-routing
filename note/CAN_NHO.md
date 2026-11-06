@@ -18,6 +18,12 @@
 - Muốn tạm dừng thu trên AWS: EventBridge Scheduler → `thu-du-lieu-5-phut` → Disable. Sửa code: tạo lại `dist/thu_lambda.zip` và Update from .zip.
   - Sửa Lambda thì chạy `thu_o_may.py` cho ĐẠT trước, sau đó xem log lượt kế tiếp. 30/10 04:11 đã làm vậy khi thêm ô absolute.
   - Trong log tìm `o_them_duoc`: chỉ bản mới in ra trường này.
+- **Chấm đỏ trên bảng theo dõi** (tab AWS) = lượt có `o_loi > 0` hoặc dòng ERROR. Tra:
+  - `nguon_aws.doc_luot(gio=72)` → lọc `chi_loi` / `loi` / `o_loi` (ĐỪNG lọc theo `thoi_tiet`: thời tiết chỉ lấy mỗi giờ, các lượt khác `thoi_tiet` rỗng là bình thường);
+  - ô nào lỗi, vì sao: `meta.json` trong `dong/tomtom_o/<ngày>/<HHMM>.zip` trên S3 (trường `loi`) — log Lambda chỉ có số đếm;
+  - Git Bash đổi `/aws/lambda/...` thành đường dẫn Windows → đặt `MSYS_NO_PATHCONV=1` trước lệnh `aws logs`.
+  - 31/10/2026 15:41: 1 ô relative (13045/7697) TomTom trả quá 20 s ("read operation timed out"); ô km/h cùng chỗ vẫn có; 574/574 lượt trong 48 giờ, chỉ lượt này lỗi. Không sửa (thêm "thử lại" phải tải lại Lambda) — nhiều lên mới sửa.
+  - 01/11/2026 16:16: lặp lại ĐÚNG ô đó (relative 13045/7697, quá 20 s), cũng khung chiều. Ô không nặng (~6 KB, bằng TB) → phía TomTom chậm với ô này. 2/804 lượt (0,25%). Nếu thành ngày nào cũng có → thêm "thử lại 1 lần cho ô quá giờ" vào Lambda (người dùng tải zip lên).
 - Kéo dữ liệu S3 về máy: `thu_thap/KEO_S3.bat` (aws s3 sync, profile `thuctap-doc`, chỉ tải tệp mới).
   - **Có tính tiền nhưng gần 0** (bảng giá AWS Price List ap-southeast-1, công bố 15/10/2026, tra 30/10):
     - truyền ra Internet: 100 GB đầu mỗi tháng MIỄN PHÍ (gộp mọi dịch vụ, mọi vùng), sau đó 0,12 USD/GB;

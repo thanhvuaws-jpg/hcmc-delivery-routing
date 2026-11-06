@@ -23,7 +23,7 @@ Mỗi quyết định ghi: ngày, nội dung, lý do, phương án đã bỏ. Mu
 
 - **Nội dung:** bỏ hẳn phần phân tích ảnh camera. Nguồn kẹt xe chính là TomTom Traffic Flow (~4.300 đoạn khu trung tâm, 5 phút/lần). "Tín hiệu báo kẹt sớm" là TomTom Traffic Incidents: kẹt xe, đóng đường, công trình, tai nạn, ngập, có độ trễ (giây) và chiều dài.
 - **Lý do:** camera cổng TP.HCM cần cho phép bằng văn bản và bị trình phân quyền chặn khi gọi API nội bộ. Người dùng không xin thêm được. TomTom chỉ cần đăng ký tài khoản miễn phí. Ùn tắc đo bằng tốc độ, không cần đếm xe.
-- **Tên đề tài đề xuất:** "Xây dựng hệ thống định tuyến giao thông thông minh cho giao hàng đô thị dựa trên khai phá dữ liệu và học máy trên nền tảng Hybrid Cloud AWS" (bỏ "phân tích hình ảnh camera"). Chờ thầy duyệt.
+- **Tên đề tài đề xuất:** "Xây dựng hệ thống định tuyến giao thông thông minh cho giao hàng đô thị dựa trên khai phá dữ liệu và học máy trên nền tảng Hybrid Cloud AWS" (bỏ "phân tích hình ảnh camera"). Chờ thầy duyệt. → **Đã thay bằng tên chốt ở QĐ-019 (31/10/2026).**
 - **Hybrid:** thu dữ liệu + huấn luyện (GPU) tại máy; phục vụ API/web + lưu trữ dài hạn trên AWS.
 - **Đã bỏ:** YOLO đếm xe, câu hỏi "camera giúp dự báo bao nhiêu".
 
@@ -277,3 +277,81 @@ Mỗi quyết định ghi: ngày, nội dung, lý do, phương án đã bỏ. Mu
   - Yen k-shortest: ra các tuyến chỉ khác nhau vài cạnh;
   - phạt rẽ trái theo (nút, đường) cũ: gộp hướng tới → phạt sai chiều;
   - phạt rẽ trái cả phương án nhanh nhất: "nhanh nhất" giữ đúng nghĩa thời gian chạy đo được.
+
+## QĐ-017 — API chạy trên VPS sẵn có của người dùng THAY EC2; mọi phần AWS khác giữ nguyên (31/10/2026)
+
+- **Người dùng quyết định** ("t có vps mà lo j cần j ec2"; rồi nói rõ: "thay vì thuê ec2 thì thay bằng vps thôi mà có bảo ko dùng aws"). CHỈ thay mục "API trên EC2 nhỏ hoặc ECS" của tuần 9.
+- **Kiến trúc:**
+  - AWS (giữ nguyên): Lambda + Scheduler 5 phút → S3; Athena; **web bản đồ trên S3 + CloudFront (HTTPS)**; CloudWatch cảnh báo; Budgets.
+  - VPS: chỉ API (FastAPI) trong container RIÊNG, đọc dữ liệu mới nhất từ S3 bằng khóa IAM chỉ-đọc (tải ra ~2 GB/tháng, trong 100 GB miễn phí). Web trên CloudFront gọi API này (CORS, HTTPS).
+  - Máy nhà: huấn luyện (GPU), đưa trọng số lên VPS.
+  - Kiến trúc lai: AWS + VPS + máy nhà.
+- **Cần trên VPS:** bộ định tuyến đo 31/10: ~1,0 GB RAM, khởi động 20 s (nạp một lần) → để trống ~1,5 GB cho API. Lúc triển khai kiểm `free -h`; thiếu thì thêm swap hoặc thu nhỏ vùng bản đồ.
+- **Ràng buộc** (VPS đang chạy Royal POS của đồ án):
+  - không đụng container / CSDL của đồ án;
+  - đi qua Caddy + Cloudflare sẵn có bằng tên miền con, không mở cổng mới (tường lửa DOCKER-USER chỉ nhận Cloudflare);
+  - sửa cấu hình Caddy thì hỏi người dùng trước;
+  - IP VPS, khóa S3 chỉ ở `.env` trên VPS, KHÔNG lên git;
+  - API có mật khẩu (TomTom gói Evaluation không cho phát tán công khai); web tĩnh trên CloudFront không chứa dữ liệu TomTom, chỉ lấy qua API.
+- **Đã bỏ:** EC2 / ECS (~10–15 USD/tháng nếu bật suốt; tín dụng AWS đã hết hạn). Các dịch vụ AWS khác KHÔNG bỏ.
+
+## QĐ-018 — Sản phẩm: API → web demo cơ bản → app Android thiết kế riêng trên Figma; train khi đủ dữ liệu (31/10/2026)
+
+- **Người dùng quyết định** (31/10 ~00:20): "app sẽ thiết kế ui ux như đồ án ko phải bê bên đồ án qua nha mà thiết kế 1 kiểu khác nhưng trên figma á; web demo thì làm giao diện cơ bản để test chức năng đc r; ... nào thu thập đủ dữ liệu để train thì bắt đầu tiếp".
+- **Thứ tự:**
+  1. API chung (FastAPI) — web và app cùng dùng: `/tuyen` (3 phương án + tuyến thay thế, giờ đi, mưa), `/tinh-lai` (xe đang chạy, QĐ-013), `/tinh-trang`, `/du-bao` (15/30/60 phút), `/ngap`.
+  2. **Web demo giao diện CƠ BẢN** — chỉ để test chức năng: bản đồ Leaflet, chọn điểm, giờ đi, mưa to, 3 tuyến + bảng so sánh, tuyến thay thế, lớp kẹt / dự báo / ngập, chế độ "xe ảo chạy lại tốc độ thật" để xem đổi tuyến giữa đường. Không cần đầu tư thẩm mỹ.
+  3. **App Android (Kotlin)** — UI/UX THIẾT KẾ KỸ trên Figma như cách làm ở đồ án (tự thiết kế toàn bộ, không dùng kiểu mặc định, người dùng duyệt bản Figma rồi mới code), nhưng **phong cách KHÁC hẳn đồ án** — không bê bộ Sơn Son / Royal POS sang. Bản đồ MapLibre/osmdroid (không cần khóa Google Maps); GPS thật, đi theo tuyến, báo đổi tuyến giữa đường.
+- **Train / test mô hình khi đủ dữ liệu** (không cần thu đủ 3 tháng mới train) — dữ liệu bắt đầu 29/10/2026 19:00:
+  - ~05–06/11 (7 ngày): train thật lần 1 (GBM + Graph WaveNet); có đặc trưng "hôm qua", chưa có "tuần trước"; kiểm tra 1–2 ngày cuối.
+  - ~12–13/11 (14 ngày): lần chính — có "tuần trước", học ~10 ngày, kiểm tra 3–4 ngày gồm cả cuối tuần.
+  - Tuần 5–6 kế hoạch (30/11–13/12): ~5 tuần dữ liệu → kết quả cho báo cáo + ablation sự cố / thời tiết.
+  - VẪN THU tiếp tới cuối kỳ (~0,2–0,3 USD/tháng): mỗi tuần train lại; 1–2 tuần cuối GIỮ RIÊNG (không học) cho chạy thử ảo tuần 11.
+  - Tháng 11 cuối mùa mưa TP.HCM: mưa còn — cần cho M6 (mưa làm kẹt thêm bao nhiêu); sang 12–1 ít mưa.
+- **Trong lúc chờ dữ liệu:** làm API + web demo, khai phá M5 / M8 / M9, kiểm tay 30 đoạn ghép.
+
+## QĐ-019 — Chốt tên đề tài (31/10/2026, người dùng nhờ chốt: "chot ten de tai cho t cai")
+
+- **Tiếng Việt:** Xây dựng hệ thống định tuyến giao hàng xe máy tại TP.HCM ứng dụng học sâu dự báo ùn tắc và AWS
+- **Tiếng Anh:** Building a Motorbike Delivery Routing System for Ho Chi Minh City Using Deep Learning Congestion Forecasting and AWS
+- Bản dài trước (~36 chữ) người dùng nhờ rút ngắn cùng ngày: "Xây dựng hệ thống định tuyến giao hàng xe máy tại TP.HCM dựa trên khai phá dữ liệu giao thông thời gian thực và dự báo ùn tắc bằng học sâu, kết hợp điện toán đám mây AWS". "Khai phá dữ liệu", "thời gian thực" chuyển xuống phần mô tả / tóm tắt đề tài.
+- Phương án ngắn khác đã đưa: "...ứng dụng khai phá dữ liệu và học sâu" (bỏ AWS); "Định tuyến giao hàng xe máy tại TP.HCM dựa trên dự báo ùn tắc bằng học sâu, kết hợp AWS".
+- **Vì sao:** nói đúng những gì đã / sẽ làm — "hệ thống" (API + web + app, QĐ-018), "xe máy" + "TP.HCM" (đồ thị xe máy, luật cấm rẽ, rẽ trái), "khai phá dữ liệu" (M1–M9, giữ chữ từ tên cũ đã gửi thầy), "thời gian thực" (TomTom 5 phút), "dự báo ùn tắc bằng học sâu" (Graph WaveNet đã tái lập bài báo), "kết hợp AWS" (Lambda, S3, Athena, CloudFront — API ở VPS theo QĐ-017 nên không ghi "trên nền tảng AWS").
+- **Đã bỏ:**
+  - "Hybrid Cloud" — dễ bị hỏi vặn; tính lai (AWS + VPS + máy nhà) giải thích trong báo cáo;
+  - "thông minh" — chung chung;
+  - "trên đồ thị" — chi tiết kỹ thuật, để trong báo cáo cho tên đỡ dài.
+- **Còn phải:** người dùng gửi thầy duyệt (thầy đã thấy bản có camera — `note/Y_TUONG.md`). Thầy sửa thì ghi QĐ mới.
+
+## QĐ-020 — Đưa hồ sơ lịch sử vào mô hình dự báo; kết quả train thật lần 1 (06/11/2026)
+
+- **Dữ liệu:** 775 khung, 29/10 18:45 → 06/11 20:15, 7.463 đoạn, 176/176 phép kiểm đạt. Học tới 04/11 10:00, kiểm tra từ 04/11 11:15 (229 khung, ~1,6 triệu ô mỗi tầm, mọi mô hình chấm trùng từng ô).
+- **Vì sao thêm hồ sơ:** GBM thắng "giữ nguyên" nhưng thua trung bình lịch sử ở 60 phút (7,64 so với 7,33) vì không biết nhịp bình thường của từng đoạn.
+- **Nội dung** (`mo_hinh/ho_so_lich_su.py`): H[khung, đoạn] = TB r cùng loại ngày (thường / cuối tuần) và ô 15 phút, chỉ từ phần học, loại chính khung đó (chống rò nhãn).
+  - GBM (`gbm_ls`): thêm `r_ls_dich`, `ls_tru_r`, `lech_ls`.
+  - Học sâu (`--ho-so`): thêm kênh độ lệch, học phần chênh so với hồ sơ ở giờ đích.
+- **Kết quả** (MAE điểm %, tập kiểm tra):
+
+  | mô hình | 15 phút | 30 phút | 60 phút |
+  |---|---|---|---|
+  | giữ nguyên | 6,49 | 8,31 | 9,78 |
+  | TB 1 giờ | 7,22 | 8,28 | 9,78 |
+  | trung bình lịch sử | 7,34 | 7,33 | 7,33 |
+  | GRU | 6,19 | 7,51 | 8,61 |
+  | Graph WaveNet | 6,16 | 7,39 | 8,36 |
+  | GBM | 5,99 | 7,05 | 7,64 |
+  | Graph WaveNet + hồ sơ | 6,24 | 6,70 | 6,73 |
+  | **GBM + hồ sơ** | **5,72** | **6,47** | **6,64** |
+
+  - **Tiêu chí thấp hơn lịch sử ≥ 10%:** GBM + hồ sơ 22,1% / 11,7% / **9,3%** → đạt ở 15, 30 phút, **chưa đạt ở 60 phút**. Graph WaveNet + hồ sơ 15,0% / 8,6% / 8,2%.
+  - Hồ sơ giúp GBM giảm 4,5% / 8,2% / 13,1%; giúp Graph WaveNet −1,3% (kém đi) / 9,3% / 19,5%.
+  - GBM + hồ sơ: RMSE 8,83 / 9,85 / 10,09; ban ngày 6,89 / 7,76 / 7,99; đúng 3 mức 86,2% / 84,6% / 84,3%; F1 mức kẹt 0,651 / 0,599 / 0,580 (giữ nguyên 0,638 / 0,544 / 0,481).
+  - Ổn định theo ngày (GBM + hồ sơ, 04/11 · 05/11 · 06/11): 15 phút 6,67 · 5,42 · 5,47; 60 phút 7,57 · 6,27 · 6,50. 04/11 chỉ tính từ 11:15 nên không có đêm dễ đoán, 06/11 tới 20:15.
+- **Giới hạn, chưa kết luận:**
+  - mới một tuần: học 5,6 ngày, kiểm tra 2,4 ngày toàn ngày thường, chưa có mưa ≥ 5 mm/h, chưa có đặc trưng "tuần trước";
+  - mốc lịch sử chỉ tra đúng thứ ở 45% dòng, còn lại lùi về loại ngày; thêm tuần thì mốc này tốt lên;
+  - GBM có 41 đặc trưng (sự cố, thời tiết, lân cận…), Graph WaveNet chỉ 5 kênh → chưa phải so công bằng; Graph WaveNet thua GBM chưa nói được học sâu kém hơn;
+  - GWN so với GRU chỉ hơn 0,5% / 1,6% / 2,9%, thấp hơn nhiều mức 10–22% trên METR-LA (488 mẫu học, đồ thị thưa, bỏ ma trận tự học); chưa chạy GRU + hồ sơ;
+  - dừng sớm của học sâu dựa trên 54 khung kiểm định, phần lớn là đêm (kiểm định 5,10 so với kiểm tra 6,24–6,73). Đã sửa: từ lần sau ít nhất 96 khung.
+- **Lần chính ~12–13/11:** train lại đủ 4 mô hình + GRU có hồ sơ; thêm sự cố / thời tiết vào Graph WaveNet để so công bằng; ablation sự cố / thời tiết.
+- **Đã bỏ:** tính hồ sơ không loại chính khung (rò nhãn); dùng hẳn đúng thứ khi mới một tuần (mỗi thứ chỉ 1 ngày, trùng chính nhãn).

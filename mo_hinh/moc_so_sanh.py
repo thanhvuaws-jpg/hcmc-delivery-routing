@@ -1,15 +1,17 @@
 """
 Mốc so sánh cho dự báo kẹt xe 15/30/60 phút trên tầng vàng (du_lieu/vang/).
 
-So 3 cách, cùng một tập kiểm tra chia THEO THỜI GIAN (KE_HOACH_DU_LIEU mục 8):
+So 5 cách, cùng một tập kiểm tra chia THEO THỜI GIAN (KE_HOACH_DU_LIEU mục 8):
   giu_nguyen   y(t+h) = r(t)                         — mốc ngây thơ, mô hình nào cũng phải thắng
   tb_1h        y(t+h) = TB r của 1 giờ gần nhất
+  lich_su      y(t+h) = TB r theo (đoạn, thứ, ô 15 phút) trên phần học — lớp LichSu, mốc của tiêu chí ≥ 10%
   gbm          HistGradientBoosting (scikit-learn) học PHẦN THAY ĐỔI y − r từ mọi đặc trưng tầng vàng
+  gbm_ls       gbm + hồ sơ lịch sử của đoạn ở giờ đích (ho_so_lich_su.py, đã chống rò rỉ, QĐ-020)
 Chia: 70% khung thời gian đầu để học, chừa KHOẢNG_HO khung, phần sau để kiểm tra (nhãn 60 phút
 của khung học cuối không được rơi vào thời gian kiểm tra).
 
-Thước đo: MAE (điểm %, r × 100) — toàn bộ, ban ngày 6–22h, và khi ĐANG đông/kẹt (r < 0,75);
-độ đúng 3 mức thông/đông/kẹt.
+Thước đo: MAE, RMSE (điểm %, r × 100) — toàn bộ, ban ngày 6–22h, và khi ĐANG đông/kẹt (r < 0,75);
+độ đúng + F1 3 mức thông/đông/kẹt, F1 riêng mức kẹt; MAE từng ngày kiểm tra (xem độ ổn định).
 Kết quả ghi mo_hinh/ket_qua/moc_<ngày chạy>.json — dữ liệu ít ngày thì số chỉ để kiểm đường ống.
 
 Chạy:  python moc_so_sanh.py
@@ -23,6 +25,9 @@ import time
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import HistGradientBoostingRegressor
+from sklearn.metrics import f1_score
+
+from ho_so_lich_su import ho_so
 
 GOC = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 VANG = os.path.join(GOC, 'du_lieu', 'vang')
@@ -40,10 +45,47 @@ def danh_gia(y, du, r_hien_tai, gio):
     e = np.abs(y - du) * 100
     ban_ngay = (gio >= 6) & (gio < 22)
     dong = r_hien_tai < 0.75
-    return {'mae': round(float(e.mean()), 3),
+    my, mdu = muc(y), muc(du)
+    return {'mae': round(float(e.mean()), 3), 'rmse': round(float(np.sqrt((e * e).mean())), 3),
             'mae_ban_ngay': round(float(e[ban_ngay].mean()), 3) if ban_ngay.any() else None,
             'mae_dang_dong_ket': round(float(e[dong].mean()), 3) if dong.any() else None,
-            'dung_3_muc': round(float((muc(y) == muc(du)).mean()), 4), 'n': int(len(y))}
+            'dung_3_muc': round(float((my == mdu).mean()), 4),
+            'f1_3_muc': round(float(f1_score(my, mdu, average='macro', labels=[0, 1, 2], zero_division=0)), 4),
+            'f1_ket': round(float(f1_score(my == 0, mdu == 0, zero_division=0)), 4), 'n': int(len(y))}
+
+
+def mae_theo_ngay(y, du, ngay):
+    """MAE (điểm %) từng ngày của phần kiểm tra — để xem mô hình có ổn định qua các ngày không."""
+    e = pd.Series(np.abs(y - du) * 100).groupby(ngay).mean()
+    return {str(k): round(float(v), 3) for k, v in e.items()}
+
+
+class LichSu:
+    """
+    Mốc TRUNG BÌNH LỊCH SỬ (tiêu chí KE_HOACH: mô hình phải thấp hơn mốc này ≥ 10% MAE). r trung bình theo
+    (đoạn, thứ, ô 15 phút trong ngày) CHỈ trên phần học, tra theo giờ ĐÍCH t+h. Mới vài tuần dữ liệu thì có thứ
+    chưa xuất hiện trong phần học -> lùi về (đoạn, ngày thường/cuối tuần, ô), rồi (đoạn, ô), rồi r hiện tại.
+    """
+
+    def __init__(self, hoc):
+        a = hoc.loc[hoc['r'].notna(), ['doan', 'khung', 'r']]
+        k = self._khoa(a['khung'])
+        a = pd.DataFrame({'doan': a['doan'].to_numpy(), 'r': a['r'].to_numpy(), **k})
+        self.m1 = a.groupby(['doan', 'thu', 'o'], sort=False)['r'].mean().rename('m1')
+        self.m2 = a.groupby(['doan', 'cuoi', 'o'], sort=False)['r'].mean().rename('m2')
+        self.m3 = a.groupby(['doan', 'o'], sort=False)['r'].mean().rename('m3')
+
+    @staticmethod
+    def _khoa(t):
+        thu = t.dt.dayofweek.to_numpy()
+        return {'thu': thu, 'cuoi': thu >= 5, 'o': (t.dt.hour * 4 + t.dt.minute // 15).to_numpy()}
+
+    def du_bao(self, b, phut):
+        """Dự báo r ở t + phut cho các dòng b; kèm tỉ lệ dòng tra được đúng (đoạn, thứ, ô)."""
+        q = pd.DataFrame({'doan': b['doan'].to_numpy(), **self._khoa(b['khung'] + pd.Timedelta(minutes=phut))})
+        q = q.join(self.m1, on=['doan', 'thu', 'o']).join(self.m2, on=['doan', 'cuoi', 'o']).join(self.m3, on=['doan', 'o'])
+        du = q['m1'].fillna(q['m2']).fillna(q['m3']).fillna(pd.Series(b['r'].to_numpy()))
+        return du.to_numpy(), float(q['m1'].notna().mean())
 
 
 def main():
@@ -67,6 +109,20 @@ def main():
 
     kq = {'tao_luc': time.strftime('%Y-%m-%d %H:%M:%S'), 'hoc_toi': str(het_hoc), 'kiem_tu': str(dau_kiem),
           'so_dong_hoc': len(hoc), 'so_dong_kiem': len(kiem), 'dac_trung': dac_trung, 'ket_qua': {}}
+    lich_su = LichSu(hoc)
+    # Hồ sơ lịch sử (đã loại khung của chính dòng, xem ho_so_lich_su.py) cho gbm_ls.
+    doan = np.sort(d['doan'].unique())
+    fi, ni = np.searchsorted(khung, d['khung'].to_numpy()), np.searchsorted(doan, d['doan'].to_numpy())
+    R = np.full((len(khung), len(doan)), np.nan, dtype=np.float32)
+    R[fi, ni] = d['r'].to_numpy()
+    H = ho_so(R, pd.DatetimeIndex(khung), cat)
+    del R
+
+    def tao_gbm():
+        return HistGradientBoostingRegressor(max_iter=400, learning_rate=0.05, max_leaf_nodes=63,
+                                             min_samples_leaf=200, l2_regularization=1.0,
+                                             categorical_features=[dac_trung.index('loai')], random_state=42)
+
     for h, y in NHAN.items():
         a = hoc[hoc[y].notna() & hoc['r'].notna()]
         b = kiem[kiem[y].notna() & kiem['r'].notna()]
@@ -74,22 +130,45 @@ def main():
         Xb = b[dac_trung].copy()
         for X_ in (X, Xb):
             X_['loai'] = X_['loai'].cat.codes
-        m = HistGradientBoostingRegressor(max_iter=400, learning_rate=0.05, max_leaf_nodes=63,
-                                          min_samples_leaf=200, l2_regularization=1.0,
-                                          categorical_features=[dac_trung.index('loai')], random_state=42)
-        m.fit(X.astype(np.float32), (a[y] - a['r']).to_numpy())
+        dich_y = (a[y] - a['r']).to_numpy()
+        m = tao_gbm()
+        m.fit(X.astype(np.float32), dich_y)
         du = np.clip(b['r'].to_numpy() + m.predict(Xb.astype(np.float32)), 0, 1)
+        # Cùng đặc trưng + hồ sơ: mức bình thường ở giờ ĐÍCH, khoảng cách tới nó, độ lệch hiện tại so với bình thường.
+        for X_, dong in ((X, a), (Xb, b)):
+            vt = dong.index.to_numpy()
+            dich = fi[vt] + int(h) // 15
+            h_dich = np.where(dich < len(khung), H[np.minimum(dich, len(khung) - 1), ni[vt]], np.nan)
+            X_['r_ls_dich'] = h_dich
+            X_['ls_tru_r'] = h_dich - dong['r'].to_numpy()
+            X_['lech_ls'] = dong['r'].to_numpy() - H[fi[vt], ni[vt]]
+        m = tao_gbm()
+        m.fit(X.astype(np.float32), dich_y)
+        du_ls = np.clip(b['r'].to_numpy() + m.predict(Xb.astype(np.float32)), 0, 1)
+        del X, Xb, m
         gio = b['khung'].dt.hour.to_numpy()
         yt, r = b[y].to_numpy(), b['r'].to_numpy()
+        ls, dung_thu = lich_su.du_bao(b, int(h))
+        ngay = b['khung'].dt.strftime('%Y-%m-%d').to_numpy()
         kq['ket_qua'][h] = {
             'giu_nguyen': danh_gia(yt, r, r, gio),
             'tb_1h': danh_gia(yt, b['r_tb_1h'].fillna(b['r']).to_numpy(), r, gio),
-            'gbm': danh_gia(yt, du, r, gio)}
+            'lich_su': danh_gia(yt, ls, r, gio),
+            'gbm': danh_gia(yt, du, r, gio),
+            'gbm_ls': danh_gia(yt, du_ls, r, gio),
+            'lich_su_dung_thu': round(dung_thu, 4),
+            'mae_theo_ngay': {'giu_nguyen': mae_theo_ngay(yt, r, ngay), 'lich_su': mae_theo_ngay(yt, ls, ngay),
+                              'gbm': mae_theo_ngay(yt, du, ngay), 'gbm_ls': mae_theo_ngay(yt, du_ls, ngay)}}
         g = kq['ket_qua'][h]
         print(f'{h:>2} phut | MAE giu nguyen {g["giu_nguyen"]["mae"]:.2f} | TB 1h {g["tb_1h"]["mae"]:.2f} | '
-              f'GBM {g["gbm"]["mae"]:.2f}  (ban ngay {g["giu_nguyen"]["mae_ban_ngay"]:.2f} -> {g["gbm"]["mae_ban_ngay"]:.2f}; '
-              f'dang dong/ket {g["giu_nguyen"]["mae_dang_dong_ket"]:.2f} -> {g["gbm"]["mae_dang_dong_ket"]:.2f}; '
-              f'dung 3 muc {g["giu_nguyen"]["dung_3_muc"]:.1%} -> {g["gbm"]["dung_3_muc"]:.1%})')
+              f'lich su {g["lich_su"]["mae"]:.2f} (dung thu {dung_thu:.0%}) | GBM {g["gbm"]["mae"]:.2f} | '
+              f'GBM+ho so {g["gbm_ls"]["mae"]:.2f} '
+              f'(thap hon lich su {100 * (1 - g["gbm_ls"]["mae"] / g["lich_su"]["mae"]):.1f}%)', flush=True)
+        for k in ('lich_su', 'gbm', 'gbm_ls'):
+            x = g[k]
+            print(f'        {k:<8} RMSE {x["rmse"]:.2f} | ban ngay {x["mae_ban_ngay"]:.2f} | dang dong/ket '
+                  f'{x["mae_dang_dong_ket"]:.2f} | dung 3 muc {x["dung_3_muc"]:.1%} | F1 3 muc {x["f1_3_muc"]:.3f} | '
+                  f'F1 ket {x["f1_ket"]:.3f} | theo ngay {g["mae_theo_ngay"][k]}', flush=True)
 
     os.makedirs(RA, exist_ok=True)
     tep = os.path.join(RA, f'moc_{time.strftime("%Y-%m-%d_%H%M")}.json')

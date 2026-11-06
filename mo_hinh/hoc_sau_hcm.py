@@ -4,7 +4,7 @@ Học sâu dự báo mức kẹt trên dữ liệu THẬT TP.HCM (tầng vàng: 
 
 Khác METR-LA:
   - Nút = ĐOẠN đường có dữ liệu TomTom (~7,4 nghìn); giá trị = r (tốc độ / đường trống); thiếu = NaN.
-    Vào 3 kênh: r chuẩn hoá (thiếu -> 0 = trung bình), "có số đo" 0/1, giờ trong ngày.
+    Vào 4 kênh: r chuẩn hoá (thiếu -> 0 = trung bình), "có số đo" 0/1, giờ trong ngày, cuối tuần 0/1.
   - Đồ thị: đoạn i -> j khi j bắt đầu ở nút cuối của i (xe đi tiếp được), cộng vòng tự thân. Ma trận THƯA;
     Graph WaveNet bỏ ma trận tự học (N × N không vừa GPU 4 GB).
   - Khung 15 phút: vào 8 khung (2 giờ) -> ra 4 khung; báo cáo 15 / 30 / 60 phút = khung 1 / 2 / 4.
@@ -13,8 +13,12 @@ Khác METR-LA:
     kiểm tra; chỉ chấm ô có r(t) và có nhãn; MAE theo điểm % (toàn bộ, ban ngày, đang đông/kẹt), đúng 3 mức.
 Dữ liệu còn ít ngày thì số chỉ để KIỂM ĐƯỜNG ỐNG, chưa kết luận mô hình nào hơn.
 
-Chạy:  python hoc_sau_hcm.py [gwn|gru] [--so-vong=200]
-Ra:    mo_hinh/ket_qua/hoc_sau/hcm_<mô hình>.json + .pt (tính từ dữ liệu TomTom — không lên git)
+Mỗi vòng lưu điểm dừng: máy tắt / ngủ giữa chừng thì chạy lại với --tiep (cùng dữ liệu).
+
+Chạy:  python hoc_sau_hcm.py [gwn|gru] [--ho-so] [--so-vong=200] [--tiep]
+       --ho-so: học phần chênh so với hồ sơ lịch sử của đoạn ở giờ đích (ho_so_lich_su.py, QĐ-020).
+Ra:    mo_hinh/ket_qua/hoc_sau/hcm_<mô hình>_<ngày cuối của dữ liệu>.json + .pt — giữ lại từng lần train để
+       so độ ổn định qua các tuần (tính từ dữ liệu TomTom — không lên git)
 """
 import glob
 import json
@@ -28,8 +32,9 @@ import scipy.sparse as sp
 import torch
 import torch.nn as nn
 
+from ho_so_lich_su import ho_so
 from hoc_sau import GRUNut, GraphWaveNet, ma_tran_thua
-from moc_so_sanh import KHOANG_HO, TY_LE_HOC, danh_gia
+from moc_so_sanh import KHOANG_HO, TY_LE_HOC, danh_gia, mae_theo_ngay
 
 GOC = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 VANG = os.path.join(GOC, 'du_lieu', 'vang')
@@ -75,6 +80,7 @@ def main():
     thong_so = [a for a in sys.argv[1:] if not a.startswith('--')]
     ten_mh = thong_so[0] if thong_so else 'gwn'
     so_vong = next((int(a.split('=', 1)[1]) for a in sys.argv if a.startswith('--so-vong=')), 200)
+    dung_ho_so = '--ho-so' in sys.argv
     torch.manual_seed(0)
     rng = np.random.default_rng(0)
     tb_ = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -95,18 +101,34 @@ def main():
     Rp = np.concatenate([np.full((VAO - 1, N), np.nan, np.float32), R, np.full((RA, N), np.nan, np.float32)])
     gio = ((khung - khung.normalize()) / pd.Timedelta(days=1)).to_numpy().astype(np.float32)
     Gp = np.concatenate([np.zeros(VAO - 1, np.float32), gio, np.zeros(RA, np.float32)])
+    cuoi = np.asarray(khung.dayofweek >= 5, dtype=np.float32)
+    Cp = np.concatenate([np.zeros(VAO - 1, np.float32), cuoi, np.zeros(RA, np.float32)])
     V = torch.tensor(Rp, device=tb_)
     G = torch.tensor(Gp, device=tb_)
+    C = torch.tensor(Cp, device=tb_)
     buoc = torch.arange(VAO + RA, device=tb_)
 
+    # --ho-so: thêm kênh "độ lệch so với mức bình thường", và mô hình học PHẦN CHÊNH so với hồ sơ ở giờ đích
+    # (hồ sơ đã chống rò rỉ, ho_so_lich_su.py) thay vì học từ mức trung bình chung.
+    Hv = None
+    if dung_ho_so:
+        Hp = np.concatenate([np.full((VAO - 1, N), np.nan, np.float32), ho_so(R, khung, cat),
+                             np.full((RA, N), np.nan, np.float32)])
+        Hv = torch.tensor(Hp, device=tb_)
+
     def lo(mau):
-        """Mẫu (khung t) -> vào (B, 3, N, VAO), ra (B, RA, N) theo r (NaN = thiếu)."""
+        """Mẫu (khung t) -> vào (B, số kênh, N, VAO); ra (B, RA, N) theo r (NaN = thiếu); mức nền cộng vào đầu ra."""
         s = torch.as_tensor(mau, device=tb_)[:, None] + buoc
         x, y = V[s[:, :VAO]], V[s[:, VAO:]]
         m = ~torch.isnan(x)
         z = torch.where(m, (x - tb) / ls, torch.zeros_like(x))
         g = G[s[:, :VAO]][:, :, None].expand_as(x)
-        return torch.stack([z, m.float(), g], dim=1).transpose(2, 3), y
+        c = C[s[:, :VAO]][:, :, None].expand_as(x)
+        kenh, nen = [z, m.float(), g, c], tb
+        if dung_ho_so:
+            kenh.append(torch.nan_to_num((x - Hv[s[:, :VAO]]) / ls, nan=0.0))
+            nen = torch.nan_to_num(Hv[s[:, VAO:]], nan=tb)
+        return torch.stack(kenh, dim=1).transpose(2, 3), y, nen
 
     def mae_co_nhan(du, y):
         m = ~torch.isnan(y)
@@ -115,15 +137,20 @@ def main():
     # Mẫu học: có ít nhất một nhãn; 10% cuối (theo thời gian) làm kiểm định.
     co_nhan = np.array([co[t + 1:t + 1 + RA].any() for t in range(T)])
     hoc_tat = np.arange(het_hoc + 1)[co_nhan[:het_hoc + 1]]
-    so_kd = max(1, int(len(hoc_tat) * TY_LE_KIEM_DINH))
+    # Ít nhất 96 khung = trọn một ngày: lần train 06/11 kiểm định 54 khung, phần lớn là đêm dễ đoán, nên dừng
+    # sớm theo số quá lạc quan (kiểm định 5,10 so với kiểm tra 6,24–6,73).
+    so_kd = min(max(96, int(len(hoc_tat) * TY_LE_KIEM_DINH)), len(hoc_tat) // 2)
     mau_hoc, mau_kd = hoc_tat[:-so_kd], hoc_tat[-so_kd:]
     mau_kt = np.arange(dau_kiem, T)
 
+    so_kenh = 5 if dung_ho_so else 4
     if ten_mh == 'gru':
-        mh = GRUNut(vao=3, ra=RA)
+        mh = GRUNut(vao=so_kenh, ra=RA)
     else:
         cac_A = [ma_tran_thua(chuyen(A)).to(tb_), ma_tran_thua(chuyen(A.T.tocsr())).to(tb_)]
-        mh = GraphWaveNet(cac_A, N, vao=3, ra=RA, khoi=3, tu_hoc=False)
+        mh = GraphWaveNet(cac_A, N, vao=so_kenh, ra=RA, khoi=3, tu_hoc=False)
+    if dung_ho_so:
+        ten_mh += '_ho_so'
     mh = mh.to(tb_)
     toi_uu = torch.optim.Adam(mh.parameters(), lr=1e-3, weight_decay=1e-4)
     print(f'{ten_mh}: {sum(p.numel() for p in mh.parameters()):,} tham so; mau hoc/kiem dinh/kiem tra '
@@ -134,20 +161,27 @@ def main():
         ra = []
         with torch.no_grad():
             for k in range(0, len(mau), LO):
-                ra.append(mh(lo(mau[k:k + LO])[0]) * ls + tb)
+                x, _, nen = lo(mau[k:k + LO])
+                ra.append(mh(x) * ls + nen)
         mh.train()
         return torch.cat(ra)
 
-    tep = os.path.join(RA_THU_MUC, f'hcm_{ten_mh}')
+    tep = os.path.join(RA_THU_MUC, f'hcm_{ten_mh}_{khung[-1]:%Y-%m-%d}')
     os.makedirs(RA_THU_MUC, exist_ok=True)
-    tot_nhat, chua_tot, lich_su = float('inf'), 0, []
-    for vong in range(so_vong):
+    vong0, tot_nhat, chua_tot, lich_su = 0, float('inf'), 0, []
+    if '--tiep' in sys.argv and os.path.exists(tep + '_dang.pt'):
+        dd = torch.load(tep + '_dang.pt', map_location=tb_, weights_only=False)
+        mh.load_state_dict(dd['mh'])
+        toi_uu.load_state_dict(dd['toi_uu'])
+        vong0, tot_nhat, chua_tot, lich_su, rng = dd['vong'], dd['tot_nhat'], dd['chua_tot'], dd['lich_su'], dd['rng']
+        print(f'Chay tiep tu vong {vong0}', flush=True)
+    for vong in range(vong0, so_vong):
         t = time.time()
         mat = []
         tron = rng.permutation(mau_hoc)
         for k in range(0, len(tron), LO):
-            x, y = lo(tron[k:k + LO])
-            loss = mae_co_nhan(mh(x) * ls + tb, y)
+            x, y, nen = lo(tron[k:k + LO])
+            loss = mae_co_nhan(mh(x) * ls + nen, y)
             toi_uu.zero_grad()
             loss.backward()
             nn.utils.clip_grad_norm_(mh.parameters(), 5)
@@ -161,6 +195,8 @@ def main():
             torch.save(mh.state_dict(), tep + '.pt')
         else:
             chua_tot += 1
+        torch.save({'mh': mh.state_dict(), 'toi_uu': toi_uu.state_dict(), 'vong': vong + 1, 'tot_nhat': tot_nhat,
+                    'chua_tot': chua_tot, 'lich_su': lich_su, 'rng': rng}, tep + '_dang.pt')
         if vong == 0 or chua_tot == 0 or (vong + 1) % 10 == 0:
             print(f'vong {vong + 1:3d}: MAE hoc {100 * np.mean(mat):.2f}, kiem dinh {100 * kd:.2f}'
                   f'{" *" if chua_tot == 0 else ""} ({time.time() - t:.1f}s'
@@ -181,11 +217,15 @@ def main():
         m = ~np.isnan(r) & ~np.isnan(y)
         gio_t = np.broadcast_to(khung[tt].hour.to_numpy()[:, None], r.shape)[m]
         dd = np.clip(du[:len(tt), b][m], 0, 1)
-        kq[p] = {'giu_nguyen': danh_gia(y[m], r[m], r[m], gio_t), ten_mh: danh_gia(y[m], dd, r[m], gio_t)}
+        ngay = np.broadcast_to(khung[tt].strftime('%Y-%m-%d').to_numpy()[:, None], r.shape)[m]
+        kq[p] = {'giu_nguyen': danh_gia(y[m], r[m], r[m], gio_t), ten_mh: danh_gia(y[m], dd, r[m], gio_t),
+                 'mae_theo_ngay': {'giu_nguyen': mae_theo_ngay(y[m], r[m], ngay), ten_mh: mae_theo_ngay(y[m], dd, ngay)}}
         g, n = kq[p]['giu_nguyen'], kq[p][ten_mh]
-        print(f'{p:>2} phut | giu nguyen {g["mae"]:.2f} -> {ten_mh} {n["mae"]:.2f} | ban ngay {g["mae_ban_ngay"]} -> '
-              f'{n["mae_ban_ngay"]} | dang dong/ket {g["mae_dang_dong_ket"]} -> {n["mae_dang_dong_ket"]} | '
-              f'dung 3 muc {g["dung_3_muc"]:.1%} -> {n["dung_3_muc"]:.1%} | {n["n"]:,} o')
+        print(f'{p:>2} phut | giu nguyen {g["mae"]:.2f} -> {ten_mh} {n["mae"]:.2f} | RMSE {g["rmse"]} -> {n["rmse"]} | '
+              f'ban ngay {g["mae_ban_ngay"]} -> {n["mae_ban_ngay"]} | dang dong/ket {g["mae_dang_dong_ket"]} -> '
+              f'{n["mae_dang_dong_ket"]} | dung 3 muc {g["dung_3_muc"]:.1%} -> {n["dung_3_muc"]:.1%} | '
+              f'F1 3 muc {g["f1_3_muc"]} -> {n["f1_3_muc"]} | F1 ket {g["f1_ket"]} -> {n["f1_ket"]} | {n["n"]:,} o')
+        print(f'        theo ngay {kq[p]["mae_theo_ngay"][ten_mh]}', flush=True)
     with open(tep + '.json', 'w', encoding='utf-8') as f:
         json.dump({'mo_hinh': ten_mh, 'khung': [str(khung[0]), str(khung[-1])], 'hoc_toi': str(khung[het_hoc]),
                    'kiem_tu': str(khung[dau_kiem]), 'so_doan': N, 'so_vong': len(lich_su),

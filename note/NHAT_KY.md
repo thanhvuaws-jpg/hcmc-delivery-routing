@@ -4,6 +4,39 @@ Mục mới nhất ở trên cùng.
 
 > 30/10/2026 11:53: các mục trong ngày từng ghi giờ ước chừng (13:00, 14:30…) — SAI, đồng hồ thật khi đó chưa tới 12:00. Đã sửa: chỉ ghi giờ có bằng chứng (giờ tệp, lệnh `date`, giờ trên AWS).
 
+## 06/11/2026 (20:25 → 23:32) — train thật lần 1 trên dữ liệu TP.HCM (QĐ-020)
+
+- S3: 2.263 lần chụp từ 29/10 23:57, 0 khung hụt. Tầng bạc + vàng dựng lại, `kiem_du_lieu.py` 176/176 ĐẠT.
+- Truy vấn log 9 ngày quá 90 s → kiểm hở bằng `aws s3 ls` tệp `tomtom_o` (trực tiếp hơn).
+- Thêm: `mo_hinh/ho_so_lich_su.py`, mốc `LichSu`, RMSE + F1 + MAE theo ngày trong `moc_so_sanh.py`; `hoc_sau_hcm.py` thêm kênh cuối tuần, `--ho-so`, `--tiep`, tên tệp theo ngày dữ liệu; `kiem_thu/test_moc_so_sanh.py` (pytest 42/42).
+- Lỗi của mình: `(khung.dayofweek >= 5).to_numpy()` — so sánh Index ra mảng numpy nên lượt GWN / GRU đầu dừng ngay. Đã sửa, chạy lại.
+- Thời gian: GBM + GBM hồ sơ 15 phút; GWN 48,6 phút (52 vòng); GRU 22,2 phút (79 vòng); GWN hồ sơ 66,9 phút (72 vòng).
+- Tốt nhất: GBM + hồ sơ 5,72 / 6,47 / 6,64 MAE; thấp hơn lịch sử 22,1% / 11,7% / 9,3% → **60 phút chưa đạt 10%**.
+- Việc tiếp: train lần chính ~12–13/11; đưa sự cố / thời tiết vào Graph WaveNet; chưa đẩy GitHub.
+
+## 01/11/2026 (18:51 → 19:05) — soát tiến độ thu, đạt mốc 72 giờ liền
+
+- Kéo S3 18:51 → dựng tầng bạc 30/10 (288), 31/10 (288), 01/11 (226) lần chụp, 0 khoảng trống → tầng vàng 7.423 đoạn, 4 ngày (có thứ Bảy, Chủ nhật).
+- Log AWS: 804 lượt từ 29/10 23:57, không hở lượt nào → **mốc "72 giờ liền" (tuần 2) đạt** (bộ thu máy 29/10 18:57 → 30/10 15:52, AWS từ 30/10 00:00).
+- 2 lượt lỗi, cùng một ô (CAN_NHO mục AWS).
+- Dung lượng ở máy: gốc 161 MB, bạc 117 MB, vàng 46 MB. Sự cố: 4.290 kẹt xe, 30 đóng đường. Mưa nhẹ 29–31/10, chưa có mưa to.
+- Train lần 1 khi đủ 7 ngày (~05–06/11), lần chính ~12–13/11 (QĐ-018).
+
+## 31/10/2026 (~23:43) — tra chấm đỏ trên bảng theo dõi
+
+- Người dùng thấy 1 chấm đỏ. Log AWS 48 giờ: 574 lượt, không hở lượt nào; 1 lượt lỗi lúc 15:41 — TomTom trả quá 20 s cho 1 ô relative (13045/7697), 29/30 ô + 30/30 ô km/h vẫn có. Ảnh hưởng không đáng kể; không sửa Lambda. Cách tra ghi ở CAN_NHO mục AWS.
+- Tên đề tài rút ngắn (QĐ-019): "Xây dựng hệ thống định tuyến giao hàng xe máy tại TP.HCM ứng dụng học sâu dự báo ùn tắc và AWS".
+
+## 31/10/2026 (00:05 → 10:35) — đẩy GitHub, chốt hướng sản phẩm (QĐ-017, QĐ-018)
+
+- Đẩy commit `59ece70` (15 tệp) lên GitHub theo yêu cầu người dùng.
+- Người dùng có VPS → API chạy trên VPS thay EC2; mọi phần AWS khác giữ nguyên (QĐ-017). Lúc đầu ghi nhầm cả web sang VPS → người dùng nhắc → đã sửa (web vẫn S3 + CloudFront).
+- Tên đề tài: người dùng nhờ chốt → QĐ-019 (đã sửa KE_HOACH đầu tệp). Chờ thầy duyệt.
+- Sản phẩm (QĐ-018): API chung → web demo giao diện cơ bản để test → app Android UI/UX riêng trên Figma (khác phong cách đồ án).
+- Lịch train: ~05–06/11 lần 1, ~12–13/11 lần chính; không cần chờ 3 tháng; thu tiếp tới cuối kỳ.
+- Người dùng tắt máy mang đi học: không ảnh hưởng — bộ thu AWS độc lập, tác vụ máy đã Disabled.
+- Chưa đẩy: QĐ-017, QĐ-018, KE_HOACH, NHAT_KY (chỉ ghi chú).
+
 ## 30–31/10/2026 (22:56 → 00:05) — tuần 7 xong phần còn lại: phạt rẽ trái, tuyến thay thế (QĐ-016)
 
 - `tim_duong.py`:

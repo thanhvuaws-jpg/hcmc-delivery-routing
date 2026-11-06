@@ -2,7 +2,8 @@
 
 Lập ngày 29/10/2026. Làm tại nhà, 3 tháng, **chỉ có một máy tính, không đi thực địa** (QĐ-002): không tự quay video, không chạy xe ghi GPS — mọi dữ liệu lấy qua mạng, đánh giá bằng dữ liệu quan sát được. Nếu tuần 1 bắt đầu thứ Hai 02/11/2026 thì tuần 13 kết thúc 31/01/2027 (trước Tết 06/02/2027). Lịch chính thức của trường khác thì dời cả bảng, giữ nguyên thứ tự.
 
-**Tên đề tài (sau QĐ-004, chờ thầy duyệt):** Xây dựng hệ thống định tuyến giao thông thông minh cho giao hàng đô thị dựa trên khai phá dữ liệu và học máy trên nền tảng Hybrid Cloud AWS.
+**Tên đề tài (chốt 31/10/2026 — QĐ-019, chờ thầy duyệt):** Xây dựng hệ thống định tuyến giao hàng xe máy tại TP.HCM ứng dụng học sâu dự báo ùn tắc và AWS.
+*(Tiếng Anh: Building a Motorbike Delivery Routing System for Ho Chi Minh City Using Deep Learning Congestion Forecasting and AWS.)*
 
 > 29/10/2026: **bỏ camera** (QĐ-004). Nguồn kẹt xe = TomTom Flow; tín hiệu báo sớm = TomTom Incidents. Các mục nhắc tới camera bên dưới đã được thay.
 
@@ -12,14 +13,15 @@ Lập ngày 29/10/2026. Làm tại nhà, 3 tháng, **chỉ có một máy tính,
 |---|---|---|
 | 0 | AWS: Bills, Budgets, IAM, tắt tài nguyên thừa; khóa TomTom | ✅ Budgets 2 USD (email đã xác minh); IAM chỉ-đọc; xóa snapshot RDS + user Admin cũ; root đã có MFA. ⬜ thầy duyệt tên đề tài (người dùng) |
 | 1 | Đồ thị xe máy có luật + tìm đường; đề cương | ✅ đồ thị 350.839 cạnh (vùng 30 ô TomTom), 90/90 tuyến 0 lỗi luật. ⬜ đề cương (người dùng bảo chưa viết) |
-| 2 | Bộ thu chạy liên tục, lưu Parquet, đẩy S3 | ✅ máy (Task Scheduler) + **AWS Lambda 24/7 lên S3** (làm sớm, thay "tuần 9"); km/h từ 30/10 04:11. ⏳ mốc "72 giờ liền" (từ 29/10 18:57) |
+| 2 | Bộ thu chạy liên tục, lưu Parquet, đẩy S3 | ✅ máy (Task Scheduler) + **AWS Lambda 24/7 lên S3** (làm sớm, thay "tuần 9"); km/h từ 30/10 04:11. ✅ mốc "72 giờ liền" đạt 01/11 ~18:57 (804 lượt AWS, 0 hở) |
 | 3 | Ghép TomTom + sự cố vào cạnh | ✅ 95,8% mẫu; sự cố 97%; bộ ghép numpy 0,7 s/lần chụp. ⬜ kiểm tay 30 đoạn |
 | 4 | 3 mức kẹt, thời tiết + sự cố theo cạnh, điểm ngập, bảng huấn luyện, EDA | ✅ tầng bạc/vàng, D8 (30 điểm ngập), M1, M2, tốc độ thật. ⏳ EDA theo thứ / khi mưa (cần thêm ngày) |
-| 5 | Baseline lịch sử + LightGBM, chia theo thời gian, METR-LA | ✅ đường ống + mốc giữ nguyên. ✅ METR-LA/PEMS-BAY (QĐ-014): HA của mình 4,15 / 2,88 MAE = bài báo 4,16 / 2,88; đồ thị 1.515 / 2.369 cạnh = công bố. ⏳ baseline lịch sử + đánh giá thật TP.HCM (cần ≥ 7–14 ngày) |
-| 6 | LSTM/GRU, ablation | 🔶 `mo_hinh/hoc_sau.py` (QĐ-014) trên METR-LA: **Graph WaveNet 2,69 / 3,06 / 3,48 MAE = bài báo 2,69 / 3,07 / 3,53**; GRU 3,00 / 3,61 / 4,48 (thông tin không gian giảm MAE 10–22%). ✅ đường ống TP.HCM `hoc_sau_hcm.py` (QĐ-015): lần đầu (1,5 ngày) GWN 7,46 / 9,14 / 10,77 vs GBM 7,59 / 9,36 / 10,53 điểm % — chưa kết luận. ⏳ chạy lại khi ≥ 7–14 ngày; ablation sự cố / thời tiết |
+| 5 | Baseline lịch sử + LightGBM, chia theo thời gian, METR-LA | ✅ đường ống + mốc giữ nguyên. ✅ METR-LA/PEMS-BAY (QĐ-014): HA của mình 4,15 / 2,88 MAE = bài báo 4,16 / 2,88; đồ thị 1.515 / 2.369 cạnh = công bố. ✅ 06/11 train thật lần 1 (QĐ-020): GBM + hồ sơ 5,72 / 6,47 / 6,64 MAE, thấp hơn lịch sử 22,1% / 11,7% / 9,3% → 60 phút chưa đạt 10%. ⏳ lần chính ~12–13/11 |
+| 6 | LSTM/GRU, ablation | 🔶 `mo_hinh/hoc_sau.py` (QĐ-014) trên METR-LA: **Graph WaveNet 2,69 / 3,06 / 3,48 MAE = bài báo 2,69 / 3,07 / 3,53**; GRU 3,00 / 3,61 / 4,48 (thông tin không gian giảm MAE 10–22%). ✅ đường ống TP.HCM `hoc_sau_hcm.py` (QĐ-015): lần đầu (1,5 ngày) GWN 7,46 / 9,14 / 10,77 vs GBM 7,59 / 9,36 / 10,53 điểm % — chưa kết luận. 🔶 06/11 (QĐ-020): Graph WaveNet + hồ sơ 6,24 / 6,70 / 6,73, chưa thắng GBM (mới 5 kênh so với 41 đặc trưng). ⏳ lần chính ~12–13/11; ablation sự cố / thời tiết |
 | 7 | Định tuyến theo thời điểm, 3 phương án | ✅ 30/10: 3 phương án theo giờ xe tới cạnh, cấm đường đóng, phạt ngập khi mưa, ALT; kiem_tra_tuan7 ĐẠT (< 2 s, 0 lỗi luật, 8h nhanh hơn ngắn nhất 17,8%). ✅ 31/10 (QĐ-016): tìm theo cạnh + ALT theo cửa sổ giờ (chậm nhất 1,23 s), phạt rẽ trái qua trục lớn 30 s (rẽ trái 3,41 → 1,95/chuyến; có lợi khi trễ rẽ thật > ~10 s; chỉ tính thời gian chạy vẫn ĐẠT 84%), tuyến thay thế (≥ 2 tuyến ở 99% cặp), tính lại giữa đường (QĐ-013) |
 | 10 | Đánh giá offline bằng tốc độ thật | 🔶 làm sớm 30/10 (QĐ-012): 630 chuyến, tối ưu nhanh hơn ngắn nhất 19,4% (khắt khe 16,1%), không chậm hơn 91% (89%) → ĐẠT tiêu chí. Tính lại giữa đường (QĐ-013): vào đường đóng 3 → 0 (khắt khe 7 → 3, đều không còn đường tránh), chuyến có đổi tuyến nhanh hơn 6% (khắt khe 4%). ⏳ chạy lại khi nhiều ngày |
-| 8, 9, 11–13 | API + web, AWS phục vụ, chạy thử ảo, báo cáo | ⬜ (bảng theo dõi 2 bộ thu đã có: `he_thong/bang_theo_doi/`) |
+| 8, 9, 11–13 | API + web, AWS phục vụ, chạy thử ảo, báo cáo | ⬜ (bảng theo dõi 2 bộ thu đã có: `he_thong/bang_theo_doi/`). QĐ-018: API chung → web demo giao diện cơ bản để test → app Android UI/UX riêng trên Figma (khác phong cách đồ án). QĐ-017: API trên VPS thay EC2, còn lại vẫn AWS |
+| — | Lịch train mô hình (QĐ-018) | ~05–06/11 lần 1 (7 ngày dữ liệu); ~12–13/11 lần chính (14 ngày, có "tuần trước"); tuần 5–6 (~5 tuần) cho báo cáo; thu tiếp tới cuối kỳ, giữ riêng 1–2 tuần cuối cho chạy thử ảo |
 
 Ngoài kế hoạch gốc đã làm thêm: D11 Kaggle, D13 Zenodo, D14 lịch, D15 km/h, D16 POI; kiểm thử tự động (34 test + 50 bất biến); repo GitHub công khai.
 **Nút thắt:** phần lớn việc tuần 4–6 cần dữ liệu tích lũy nhiều ngày (thứ trong tuần, mưa, "hôm qua/tuần trước").
@@ -218,8 +220,8 @@ Mỗi tuần: **Việc** → **Đầu ra** → **Xong khi**.
 
 - Việc:
   - S3 + Athena cho dữ liệu.
-  - API trên EC2 nhỏ hoặc ECS.
-  - Web trên S3 + CloudFront, HTTPS.
+  - ~~API trên EC2 nhỏ hoặc ECS.~~ → API trên **VPS sẵn có** của người dùng, container riêng, qua Caddy + Cloudflare, có mật khẩu (QĐ-017, 31/10/2026 — chỉ thay EC2, các phần AWS khác giữ nguyên).
+  - Web trên S3 + CloudFront, HTTPS (gọi API trên VPS).
   - Bộ thu ở nhà đẩy số liệu lên S3 bằng user IAM chỉ có quyền ghi đúng thư mục.
   - CloudWatch cảnh báo.
   - Vẽ sơ đồ kiến trúc.
