@@ -1,0 +1,726 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Định tuyến giao hàng TP.HCM — bản thử</title>
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+<style>
+  /* Giao diện cơ bản để test chức năng (QĐ-018), chưa phải thiết kế cuối. */
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { height: 100%; margin: 0; font: 14px/1.4 system-ui, "Segoe UI", sans-serif; color: #1c1c1a; background: #fff; }
+  #khung { display: flex; height: 100%; }
+  #ben { width: 380px; flex: none; overflow-y: auto; padding: 12px 14px; border-right: 1px solid #d9d8d3; }
+  #ban-do { flex: 1; min-width: 0; position: relative; }
+  #map { position: absolute; inset: 0; }
+  #khung.dang-di #ben { display: none; }
+  h1 { font-size: 16px; margin: 0 0 4px; }
+  h2 { font-size: 13px; margin: 14px 0 6px; color: #52514e; }
+  p.goi-y { margin: 0 0 8px; color: #52514e; font-size: 13px; }
+  .dong { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; flex-wrap: wrap; }
+  .dong label { display: flex; gap: 4px; align-items: center; }
+  input, select, button { font: inherit; padding: 4px 6px; }
+  button { cursor: pointer; }
+  button:disabled { cursor: default; opacity: .55; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { padding: 4px 3px; text-align: right; border-bottom: 1px solid #e8e7e3; }
+  th:first-child, td:first-child { text-align: left; }
+  #bang tr { cursor: pointer; }
+  tbody tr.chon { background: #f1f0ec; font-weight: 600; }
+  .cham { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; }
+  #trang-thai { font-size: 13px; color: #52514e; min-height: 18px; margin-top: 6px; }
+  #trang-thai.loi { color: #b3261e; }
+  .chu-nho { font-size: 12px; color: #6c6b66; }
+  #ten-duong { font-size: 12px; color: #52514e; margin-top: 6px; }
+  #bat-dau { width: 100%; padding: 8px; font-weight: 600; background: #1f5fbf; color: #fff; border: 0; border-radius: 4px; margin-top: 8px; }
+
+  .ghim { padding: 2px 7px; border-radius: 10px; color: #fff; font: 600 12px system-ui, sans-serif; border: 2px solid #fff; box-shadow: 0 1px 4px rgb(0 0 0 / .4); cursor: grab; }
+  #xe-ao { width: 34px; height: 34px; }
+
+  /* Màn hình dẫn đường */
+  #dd-tren, #dd-duoi, #dd-tb { position: absolute; left: 12px; z-index: 2; width: min(460px, calc(100% - 64px)); background: #fff; border-radius: 8px; box-shadow: 0 2px 10px rgb(0 0 0 / .3); }
+  #dd-tren { top: 12px; display: flex; gap: 12px; align-items: center; padding: 10px 14px; background: #17457f; color: #fff; }
+  #dd-mui { width: 52px; height: 52px; flex: none; }
+  #dd-mui svg { width: 100%; height: 100%; }
+  #dd-xa { font-size: 26px; font-weight: 700; line-height: 1.1; }
+  #dd-chi { font-size: 16px; }
+  #dd-sau { font-size: 12px; opacity: .85; margin-top: 2px; }
+  #dd-tb { top: 106px; padding: 6px 12px; background: #fff7e0; font-size: 13px; }
+  #dd-duoi { bottom: 30px; padding: 10px 14px; }
+  #dd-so { display: flex; gap: 16px; align-items: baseline; flex-wrap: wrap; margin-bottom: 2px; }
+  #dd-con-phut { font-size: 22px; font-weight: 700; color: #17457f; }
+  #dd-toc button.chon { background: #17457f; color: #fff; border-color: #17457f; }
+  #dd-ket { margin-left: auto; }
+  #dd-tong { font-size: 13px; margin: 6px 0; }
+  #dd-tong b { font-size: 15px; }
+  @media (max-width: 760px) {
+    #khung { flex-direction: column-reverse; }
+    #ben { width: 100%; height: 50%; border-right: 0; border-top: 1px solid #d9d8d3; }
+    #dd-tren, #dd-duoi, #dd-tb { width: calc(100% - 24px); }
+  }
+</style>
+</head>
+<body>
+<div id="khung">
+  <div id="ben">
+    <h1>Định tuyến giao hàng xe máy TP.HCM</h1>
+    <p class="goi-y">Bấm bản đồ chọn <b>điểm đi</b>, bấm lần nữa chọn <b>điểm đến</b>. Kéo điểm để đổi.</p>
+    <div class="dong">
+      <button id="doi-chieu">Đổi chiều</button>
+      <button id="xoa">Xóa điểm</button>
+    </div>
+
+    <h2>Đi lúc nào (trong dữ liệu đã thu)</h2>
+    <div class="dong">
+      <select id="ngay"></select>
+      <input id="gio" type="time" step="300">
+      <button id="moi-nhat">Mới nhất</button>
+    </div>
+
+    <h2>Thời tiết</h2>
+    <div class="dong">
+      <label>Mưa <select id="mua">
+        <option value="0">không</option><option value="3">vừa (3 mm/h)</option><option value="10">to (10 mm/h)</option>
+      </select></label>
+      <label><input id="trieu" type="checkbox"> Triều cường</label>
+    </div>
+
+    <h2>Kết quả</h2>
+    <table>
+      <thead><tr><th>Tuyến</th><th>km</th><th title="Thời gian bộ định tuyến dự kiến">Dự kiến</th><th title="Chạy lại theo tốc độ TomTom đo thật sau đó">Thực tế</th><th title="Số cạnh kẹt nặng">Kẹt</th><th title="Rẽ trái qua trục lớn">Rẽ trái</th><th title="Số cạnh dễ ngập">Ngập</th></tr></thead>
+      <tbody id="bang"><tr><td colspan="7" class="chu-nho">Chưa có tuyến</td></tr></tbody>
+    </table>
+    <button id="bat-dau" disabled>Bắt đầu đi tuyến này</button>
+    <div id="ten-duong"></div>
+    <div id="trang-thai"></div>
+    <div class="dong" style="margin-top:8px"><button id="tuyen-khac" disabled>Xem tuyến khác</button></div>
+    <table id="bang-khac" hidden>
+      <thead><tr><th>Tuyến khác</th><th>km</th><th>Dự kiến</th><th>Thực tế</th><th title="Chi phí so với tuyến tốt nhất">Gấp</th><th title="Phần chiều dài trùng tuyến trước">Trùng</th></tr></thead>
+      <tbody id="bang-khac-than"></tbody>
+    </table>
+
+    <h2>Lớp bản đồ</h2>
+    <div class="dong"><label><input id="lop-ket" type="checkbox"> Kẹt xe</label>
+      <span class="chu-nho"><span class="cham" style="background:#1baf7a"></span>thông
+      <span class="cham" style="background:#eda100"></span>đông
+      <span class="cham" style="background:#e34948"></span>kẹt
+      <span class="cham" style="background:#1c1c1a"></span>đóng</span></div>
+    <div class="dong"><label><input id="lop-ngap" type="checkbox"> Điểm dễ ngập</label></div>
+    <div class="dong"><label><input type="checkbox" disabled> Dự báo 15/30/60 phút</label> <span class="chu-nho">gắn sau lần train chính</span></div>
+    <p class="chu-nho" id="ghi-chu"></p>
+  </div>
+  <div id="ban-do">
+    <div id="map"></div>
+    <div id="dd-tren" hidden>
+      <div id="dd-mui"></div>
+      <div>
+        <div id="dd-xa"></div>
+        <div id="dd-chi"></div>
+        <div id="dd-sau"></div>
+      </div>
+    </div>
+    <div id="dd-tb" hidden></div>
+    <div id="dd-duoi" hidden>
+      <div id="dd-so">
+        <span id="dd-con-phut"></span>
+        <span id="dd-con-km"></span>
+        <span>Đến lúc <b id="dd-den-luc"></b></span>
+      </div>
+      <div class="chu-nho" id="dd-dang"></div>
+      <div id="dd-tong" hidden></div>
+      <div class="dong" style="margin:8px 0 0">
+        <button id="dd-dung">Tạm dừng</button>
+        <span id="dd-toc"></span>
+        <button id="dd-ket">Kết thúc</button>
+      </div>
+      <div class="chu-nho" style="margin-top:4px">Xe ảo chạy lại theo số đo TomTom đã thu. Giờ đến chỉ dùng số đo tới lúc đó, như khi đi thật.</div>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script>
+const TEN = { ngan_nhat: 'Ngắn nhất', nhanh_nhat: 'Nhanh nhất', toi_uu: 'Tối ưu' };
+const MAU = { ngan_nhat: '#2a78d6', nhanh_nhat: '#eb6834', toi_uu: '#008300' };
+const MAU_KHAC = ['#008300', '#6250d6', '#e87ba4'];
+const $ = id => document.getElementById(id);
+const RONG = { type: 'FeatureCollection', features: [] };
+const tapHop = features => ({ type: 'FeatureCollection', features });
+const lngLat = h => h.map(([a, b]) => [b, a]);
+const duong = (toaDo, thuocTinh) => ({ type: 'Feature', properties: thuocTinh || {}, geometry: { type: 'LineString', coordinates: lngLat(toaDo) } });
+
+// Bản đồ vector của OpenFreeMap, dữ liệu OpenStreetMap, không cần khóa: chữ tên đường luôn thẳng khi xoay bản đồ.
+// Không tải được thì dùng ảnh HOT (chữ sẽ xoay theo). Không dùng tile.openstreetmap.org và CARTO (QĐ-022).
+const NEN_VECTOR = 'https://tiles.openfreemap.org/styles/liberty';
+const NEN_ANH = {
+  version: 8,
+  sources: { nen: { type: 'raster', tileSize: 256, attribution: '&copy; OpenStreetMap contributors, ảnh nền Humanitarian OSM Team, OpenStreetMap France',
+    tiles: ['a', 'b', 'c'].map(s => `https://${s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png`) } },
+  layers: [{ id: 'nen', type: 'raster', source: 'nen' }]
+};
+
+let map, hinhDoan = null, diem = { di: null, den: null }, nhan = { di: null, den: null };
+let tuyenChon = null, thuTu = 0, vungDuLieu = null, soLoiAnh = 0, daVeDuPhong = false;
+
+function trangThai(chu, loi) {
+  $('trang-thai').textContent = chu || '';
+  $('trang-thai').className = loi ? 'loi' : '';
+}
+
+async function goi(url, than) {
+  const r = await fetch(url, than ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(than) } : undefined);
+  const j = await r.json();
+  if (!r.ok) throw new Error(j.loi || j.detail || ('Loi ' + r.status));
+  return j;
+}
+
+// ── Tạo bản đồ và các lớp ──
+async function taoBanDo() {
+  let nen = NEN_ANH;
+  try { if ((await fetch(NEN_VECTOR)).ok) nen = NEN_VECTOR; } catch (e) { /* dùng ảnh */ }
+  map = new maplibregl.Map({ container: 'map', style: nen, center: [106.68, 10.78], zoom: 12, minZoom: 10, maxPitch: 65 });
+  map.addControl(new maplibregl.NavigationControl(), 'top-right');
+  map.on('error', e => {
+    if (e.sourceId && e.sourceId !== 'nen' && !/openmaptiles|ne2/.test(e.sourceId)) return;
+    if (++soLoiAnh === 3) veDuongDuPhong();
+  });
+  await new Promise(xong => map.once('load', xong));
+  // Khối nhà 3D che mất tuyến khi nghiêng bản đồ.
+  if (map.getLayer('building-3d')) map.setLayoutProperty('building-3d', 'visibility', 'none');
+  const truoc = (map.getStyle().layers.find(l => l.type === 'symbol') || {}).id;
+  ['du-phong', 'vung', 'ket', 'ngap', 'tuyen', 'khac', 'dd-tuyen', 'dd-da-di'].forEach(id => map.addSource(id, { type: 'geojson', data: RONG }));
+  const them = (id, source, paint, loc, layout) => map.addLayer({ id, source, type: 'line', paint, ...(loc ? { filter: loc } : {}),
+    layout: { 'line-join': 'round', 'line-cap': 'round', ...(layout || {}) } }, truoc);
+  them('du-phong', 'du-phong', { 'line-color': '#a8a7a1', 'line-width': 1 });
+  them('vung', 'vung', { 'line-color': '#6c6b66', 'line-width': 1, 'line-dasharray': [3, 3] });
+  them('ket', 'ket', { 'line-color': ['get', 'mau'], 'line-width': 3, 'line-opacity': 0.8 });
+  them('ngap', 'ngap', { 'line-color': ['get', 'mau'], 'line-width': 5, 'line-opacity': 0.8 });
+  them('tuyen', 'tuyen', { 'line-color': ['get', 'mau'], 'line-width': ['case', ['==', ['get', 'chon'], 1], 6, 3],
+    'line-opacity': ['case', ['==', ['get', 'chon'], 1], 0.95, 0.55] }, null, { 'line-sort-key': ['get', 'chon'] });
+  them('khac-lien', 'khac', { 'line-color': ['get', 'mau'], 'line-width': 4 }, ['==', ['get', 'i'], 0]);
+  them('khac-net', 'khac', { 'line-color': ['get', 'mau'], 'line-width': 4, 'line-dasharray': [2, 1.5] }, ['>', ['get', 'i'], 0]);
+  const rong = ['interpolate', ['linear'], ['zoom'], 12, 5, 17, 13];
+  them('dd-vien', 'dd-tuyen', { 'line-color': '#fff', 'line-width': ['interpolate', ['linear'], ['zoom'], 12, 7, 17, 17] });
+  them('dd-tuyen', 'dd-tuyen', { 'line-color': ['get', 'mau'], 'line-width': rong });
+  them('dd-da-di', 'dd-da-di', { 'line-color': '#9a9994', 'line-width': rong });
+
+  const nhanNgap = new maplibregl.Popup({ closeButton: false, closeOnClick: false });
+  map.on('mousemove', 'ngap', e => nhanNgap.setLngLat(e.lngLat).setText(e.features[0].properties.chu).addTo(map));
+  map.on('mouseleave', 'ngap', () => nhanNgap.remove());
+  map.on('click', e => {
+    if (dd) return;
+    if (vungDuLieu && !vungDuLieu.contains(e.lngLat)) {
+      trangThai('Điểm này nằm ngoài vùng có dữ liệu (khung đứt nét).', true);
+      return;
+    }
+    if (!diem.di) { datDiem('di', e.lngLat); return; }
+    datDiem('den', e.lngLat);
+    tinhTuyen();
+  });
+}
+
+// Nền không tải được thì vẫn có bản đồ để chọn điểm: vẽ các đường chính từ dữ liệu của đề tài.
+async function veDuongDuPhong() {
+  if (daVeDuPhong) return;
+  daVeDuPhong = true;
+  if (!hinhDoan) hinhDoan = await goi('/api/hinh-doan');
+  map.getSource('du-phong').setData(tapHop(Object.values(hinhDoan).map(h => duong(h))));
+  $('ghi-chu').textContent = 'Không tải được bản đồ nền, đang vẽ đường chính từ dữ liệu của đề tài.';
+}
+
+function thoiDiem() { return $('ngay').value + 'T' + ($('gio').value || '00:00') + ':00'; }
+
+function yeuCau() {
+  return { di: [diem.di.lat, diem.di.lng], den: [diem.den.lat, diem.den.lng], luc: thoiDiem(),
+           mua_mm: Number($('mua').value), trieu_cuong: $('trieu').checked };
+}
+
+function datDiem(loai, ll) {
+  diem[loai] = ll;
+  if (nhan[loai]) { nhan[loai].setLngLat(ll); return; }
+  const el = document.createElement('div');
+  el.className = 'ghim';
+  el.textContent = loai === 'di' ? 'Đi' : 'Đến';
+  el.style.background = loai === 'di' ? '#008300' : '#c62828';
+  nhan[loai] = new maplibregl.Marker({ element: el, draggable: true, anchor: 'bottom' }).setLngLat(ll).addTo(map);
+  nhan[loai].on('dragend', () => { diem[loai] = nhan[loai].getLngLat(); tinhTuyen(); });
+}
+
+function veTuyen() {
+  const kq = window.kqHienTai;
+  const f = [];
+  if (kq) for (const p of Object.keys(TEN)) {
+    const r = kq.phuong_an[p];
+    if (r) f.push(duong(r.toa_do, { p, mau: MAU[p], chon: p === tuyenChon ? 1 : 0 }));
+  }
+  map.getSource('tuyen').setData(tapHop(f));
+}
+
+function xoaKhac() { map.getSource('khac').setData(RONG); $('bang-khac').hidden = true; }
+
+function chonTuyen(p) {
+  tuyenChon = p;
+  veTuyen();
+  document.querySelectorAll('#bang tr').forEach(tr => tr.classList.toggle('chon', tr.dataset.p === p));
+  const r = window.kqHienTai && window.kqHienTai.phuong_an[p];
+  $('ten-duong').textContent = r ? 'Đi qua: ' + (r.ten_duong.join(' → ') || '(đường không tên)') : '';
+  $('bat-dau').disabled = !r;
+  $('bat-dau').textContent = r ? 'Bắt đầu đi tuyến ' + TEN[p] : 'Bắt đầu đi tuyến này';
+}
+
+function o(chu) { const td = document.createElement('td'); td.textContent = chu; return td; }
+
+function veBang(kq) {
+  const than = $('bang');
+  than.replaceChildren();
+  for (const p of Object.keys(TEN)) {
+    const r = kq.phuong_an[p];
+    const tr = document.createElement('tr');
+    tr.dataset.p = p;
+    const ten = document.createElement('td');
+    const cham = document.createElement('span');
+    cham.className = 'cham';
+    cham.style.background = MAU[p];
+    ten.append(cham, TEN[p]);
+    tr.append(ten);
+    if (!r) { const td = o('không có đường'); td.colSpan = 6; tr.append(td); than.append(tr); continue; }
+    tr.append(o((r.dai_m / 1000).toFixed(1)), o(r.phut.toFixed(1) + "'"));
+    const tt = o(r.thuc_te ? r.thuc_te.phut.toFixed(1) + "'" : '—');
+    if (r.thuc_te) tt.title = 'Có số đo thật trên ' + Math.round(r.thuc_te.ty_le_do_that * 100) + '% chiều dài; vào đường đóng ' + r.thuc_te.vao_duong_dong + ' lần';
+    tr.append(tt, o(r.so_canh_ket), o(r.so_re_trai_lon), o(r.so_canh_ngap));
+    tr.onclick = () => chonTuyen(p);
+    than.append(tr);
+  }
+}
+
+function xoaKetQua() {
+  window.kqHienTai = null;
+  tuyenChon = null;
+  veTuyen();
+  $('bang').replaceChildren();
+  $('ten-duong').textContent = '';
+  $('bat-dau').disabled = true;
+  $('bat-dau').textContent = 'Bắt đầu đi tuyến này';
+}
+
+async function tinhTuyen() {
+  if (!diem.di || !diem.den) return;
+  const stt = ++thuTu, bd = performance.now();
+  trangThai('Đang tính…');
+  $('tuyen-khac').disabled = true;
+  $('bat-dau').disabled = true;
+  xoaKhac();
+  try {
+    const kq = await goi('/api/tuyen', yeuCau());
+    if (stt !== thuTu) return;
+    window.kqHienTai = kq;
+    veBang(kq);
+    chonTuyen(kq.phuong_an.toi_uu ? 'toi_uu' : 'ngan_nhat');
+    const lech = Math.max(...Object.values(kq.phuong_an).filter(Boolean).map(r => Math.max(r.lech_di_m, r.lech_den_m)));
+    trangThai('Biết tình trạng tới lần chụp ' + kq.lan_chup.slice(5, 16) + ' · ' + ((performance.now() - bd) / 1000).toFixed(1) + ' s'
+      + (lech > 150 ? ' · điểm chọn cách đường gần nhất ' + lech + ' m' : ''));
+    $('tuyen-khac').disabled = false;
+  } catch (e) {
+    if (stt !== thuTu) return;
+    xoaKetQua();
+    trangThai(e.message, true);
+  }
+}
+
+async function tuyenKhac() {
+  const nut = $('tuyen-khac');
+  nut.disabled = true;
+  trangThai('Đang tìm tuyến khác…');
+  try {
+    const kq = await goi('/api/tuyen-thay-the', yeuCau());
+    const than = $('bang-khac-than');
+    than.replaceChildren();
+    const f = [];
+    kq.tuyen.forEach((r, i) => {
+      const mau = MAU_KHAC[i % MAU_KHAC.length];
+      f.push(duong(r.toa_do, { mau, i }));
+      const tr = document.createElement('tr');
+      const ten = document.createElement('td');
+      const cham = document.createElement('span');
+      cham.className = 'cham';
+      cham.style.background = mau;
+      ten.append(cham, i ? 'Tuyến ' + (i + 1) : 'Tốt nhất');
+      tr.append(ten, o((r.dai_m / 1000).toFixed(1)), o(r.phut.toFixed(1) + "'"), o(r.thuc_te ? r.thuc_te.phut.toFixed(1) + "'" : '—'),
+        o('×' + r.gian.toFixed(2)), o(Math.round(r.trung * 100) + '%'));
+      than.append(tr);
+    });
+    map.getSource('khac').setData(tapHop(f));
+    $('bang-khac').hidden = false;
+    trangThai('Có ' + kq.tuyen.length + ' tuyến khác nhau');
+  } catch (e) {
+    trangThai(e.message, true);
+  }
+  nut.disabled = false;
+}
+
+function mauR(r) { return r < 0 ? '#1c1c1a' : r < 40 ? '#e34948' : r < 75 ? '#eda100' : '#1baf7a'; }
+
+async function veKet() {
+  if (!$('lop-ket').checked) { map.getSource('ket').setData(RONG); return; }
+  try {
+    trangThai('Đang tải lớp kẹt xe…');
+    if (!hinhDoan) hinhDoan = await goi('/api/hinh-doan');
+    const tt = await goi('/api/tinh-trang?luc=' + encodeURIComponent(thoiDiem()));
+    const f = [];
+    tt.doan.forEach((d, i) => { const h = hinhDoan[d]; if (h) f.push(duong(h, { mau: mauR(tt.r[i]) })); });
+    map.getSource('ket').setData(tapHop(f));
+    trangThai('Kẹt xe lúc ' + tt.lan_chup.slice(5, 16) + ' · ' + tt.doan.length + ' đoạn');
+  } catch (e) { trangThai(e.message, true); }
+}
+
+async function veNgap() {
+  if (!$('lop-ngap').checked) { map.getSource('ngap').setData(RONG); return; }
+  try {
+    const ds = await goi('/api/ngap');
+    const f = [];
+    ds.forEach(x => {
+      const mua = x.nguyen_nhan === 'mua';
+      x.canh.forEach(c => f.push(duong(c, { mau: mua ? '#6250d6' : '#2a78d6', chu: (mua ? 'Ngập do mưa: ' : 'Ngập do triều: ') + x.duong })));
+    });
+    map.getSource('ngap').setData(tapHop(f));
+    trangThai(ds.length + ' điểm dễ ngập đã ghép vào bản đồ');
+  } catch (e) { trangThai(e.message, true); }
+}
+
+// ── Dẫn đường: xe ảo chạy lại trên số đo thật ──
+// Xe di chuyển theo `giay` (tốc độ đo thật ở lúc xe tới từng cạnh). Giờ đến và màu tuyến chỉ dùng `du_kien`, `r_biet`:
+// những gì bộ định tuyến biết tới lần chụp hiện tại, cập nhật mỗi lần có lần chụp mới, như khi đi thật.
+const MOI_LAN_CHUP_MS = 300000;
+const MUI_TEN = { xuat_phat: 0, di_thang: 0, che_phai: 45, re_phai: 90, che_trai: -45, re_trai: -90 };
+const TOC_NUT = [1, 5, 10, 30];
+let dd = null;
+
+const dinhGio = ms => new Date(ms).toTimeString().slice(0, 5);
+function dinhLuc(ms) {
+  const d = new Date(ms), p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+const phanTich = s => Date.parse(s.replace(' ', 'T'));
+const coSo = x => { const a = [0]; x.forEach(v => a.push(a[a.length - 1] + v)); return a; };
+const so1 = x => x.toFixed(1).replace('.', ',');
+const dinhKm = m => m < 1000 ? (Math.round(m / 10) * 10) + ' m' : so1(m / 1000) + ' km';
+
+function napTuyenDanDuong(t) {
+  dd.t = t;
+  dd.dem = 0;
+  dd.mocMs = phanTich(t.luc);
+  dd.diem = lngLat(t.toa_do);
+  dd.lkGiay = coSo(t.giay);
+  dd.lkMet = coSo(t.dai);
+  dd.lkDuKien = coSo(t.du_kien);
+  dd.tGiay = 0;
+  dd.buocSau = 0;
+  veTuyenDanDuong();
+}
+
+function mauBiet(t, i) {
+  const r = t.r_biet[i];
+  return r < 40 ? '#d32f2f' : r < 75 ? '#ef8f00' : '#2a78d6';
+}
+
+function veTuyenDanDuong() {
+  const t = dd.t, f = [];
+  let dau = 0;
+  for (let i = 1; i <= t.canh.length; i++) {
+    if (i === t.canh.length || mauBiet(t, i) !== mauBiet(t, dau)) {
+      f.push({ type: 'Feature', properties: { mau: mauBiet(t, dau) }, geometry: { type: 'LineString', coordinates: dd.diem.slice(dau, i + 1) } });
+      dau = i;
+    }
+  }
+  map.getSource('dd-tuyen').setData(tapHop(f));
+}
+
+function canhTai(s) {
+  // Cạnh xe đang đi ở giây thứ s của tuyến hiện tại.
+  const T = dd.lkGiay;
+  let a = Math.min(dd.dem, T.length - 2), b = T.length - 2;
+  if (T[a] > s) a = 0;
+  while (a < b) { const g = (a + b + 1) >> 1; if (T[g] <= s) a = g; else b = g - 1; }
+  dd.dem = a;
+  return a;
+}
+
+function viTri(s) {
+  const j = canhTai(s), T = dd.lkGiay;
+  const f = T[j + 1] > T[j] ? Math.min(1, (s - T[j]) / (T[j + 1] - T[j])) : 1;
+  const a = dd.diem[j], b = dd.diem[j + 1];
+  return { j, f, p: [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f], m: dd.lkMet[j] + f * dd.t.dai[j] };
+}
+
+function diemTheoMet(m) {
+  const M = dd.lkMet;
+  if (m >= M[M.length - 1]) return dd.diem[dd.diem.length - 1];
+  let a = 0, b = M.length - 2;
+  while (a < b) { const g = (a + b + 1) >> 1; if (M[g] <= m) a = g; else b = g - 1; }
+  const f = M[a + 1] > M[a] ? (m - M[a]) / (M[a + 1] - M[a]) : 0;
+  const x = dd.diem[a], y = dd.diem[a + 1];
+  return [x[0] + (y[0] - x[0]) * f, x[1] + (y[1] - x[1]) * f];
+}
+
+function huongTu(p, q) {
+  const dx = (q[0] - p[0]) * Math.cos(p[1] * Math.PI / 180), dy = q[1] - p[1];
+  return (Math.atan2(dx, dy) * 180 / Math.PI + 360) % 360;
+}
+
+async function batDauDanDuong() {
+  const kq = window.kqHienTai, r = kq && kq.phuong_an[tuyenChon];
+  if (!r) return;
+  trangThai('Đang chuẩn bị dẫn đường…');
+  $('bat-dau').disabled = true;
+  let t;
+  try {
+    t = await goi('/api/dan-duong', { canh: r.canh, luc: thoiDiem() });
+  } catch (e) { trangThai(e.message, true); $('bat-dau').disabled = false; return; }
+  const yc = yeuCau();
+  dd = { den: yc.den, mua_mm: yc.mua_mm, trieu_cuong: yc.trieu_cuong, toc: 10, dung: false, cho: false, xong: false,
+         tichGiay: 0, tichMet: 0, soDoi: 0, duKienDau: coSo(t.du_kien).pop(), daDi: [], capNhat: 0, truoc: performance.now(), huong: null };
+  napTuyenDanDuong(t);
+  dd.kBiet = Math.floor(phanTich(t.lan_chup) / MOI_LAN_CHUP_MS);
+  map.getSource('tuyen').setData(RONG);
+  xoaKhac();
+  $('khung').classList.add('dang-di');
+  ['dd-tren', 'dd-duoi', 'dd-so', 'dd-dang'].forEach(id => { $(id).hidden = false; });
+  Object.values(nhan).forEach(m => m && m.setDraggable(false));
+  $('dd-tong').hidden = true;
+  $('dd-dung').hidden = false;
+  $('dd-dung').textContent = 'Tạm dừng';
+  $('dd-ket').textContent = 'Kết thúc';
+  veNutToc();
+  thongBao(t.het_du_lieu ? 'Sau ' + t.lan_chup.slice(11, 16) + ' chưa có số đo mới: xe chạy theo số đo cuối, chỉ để thử giao diện.' : '');
+  map.setMaxBounds(null);
+  map.resize();
+  map.setPadding({ top: map.getContainer().clientHeight * 0.5, bottom: 0, left: 0, right: 0 });
+  const el = document.createElement('div');
+  el.id = 'xe-ao';
+  el.innerHTML = '<svg viewBox="0 0 34 34" width="34" height="34"><circle cx="17" cy="17" r="15" fill="#fff" stroke="#17457f" stroke-width="2"/><path d="M17 6 L26 26 L17 21 L8 26 Z" fill="#1f5fbf"/></svg>';
+  dd.xe = new maplibregl.Marker({ element: el, rotationAlignment: 'map', pitchAlignment: 'map' }).setLngLat(dd.diem[0]).addTo(map);
+  dd.huong = huongTu(dd.diem[0], diemTheoMet(30));
+  map.jumpTo({ center: dd.diem[0], zoom: 17, pitch: 50, bearing: dd.huong });
+  trangThai('');
+  dd.raf = requestAnimationFrame(khungHinh);
+}
+
+function veNutToc() {
+  const k = $('dd-toc');
+  k.replaceChildren(...TOC_NUT.map(v => {
+    const b = document.createElement('button');
+    b.textContent = v + '×';
+    b.className = v === dd.toc ? 'chon' : '';
+    b.onclick = () => { dd.toc = v; veNutToc(); };
+    return b;
+  }));
+}
+
+function thongBao(chu) {
+  $('dd-tb').textContent = chu;
+  $('dd-tb').hidden = !chu;
+}
+
+function khungHinh(bay) {
+  if (!dd) return;
+  const dt = Math.min((bay - dd.truoc) / 1000, 0.25);
+  dd.truoc = bay;
+  if (!dd.dung && !dd.cho && !dd.xong) tien(dt * dd.toc);
+  veXe(dt);
+  if (bay - dd.capNhat > 200) { dd.capNhat = bay; veChu(); }
+  if (!dd.xong) dd.raf = requestAnimationFrame(khungHinh);
+}
+
+function tien(s) {
+  const T = dd.lkGiay, n = T.length - 1;
+  const moi = dd.tGiay + s;
+  // Có lần chụp mới thì tính lại ở nút giao đầu tiên xe tới sau mốc đó, như phương án E khi chấm tuyến.
+  const tMoc = ((dd.kBiet + 1) * MOI_LAN_CHUP_MS - dd.mocMs) / 1000;
+  if (moi >= tMoc) {
+    const j = canhTai(Math.max(dd.tGiay, tMoc));
+    if (j + 1 < n && moi >= T[j + 1]) {
+      dd.tGiay = T[j + 1];
+      dd.dem = j + 1;
+      dd.kBiet = Math.floor((dd.mocMs + dd.tGiay * 1000) / MOI_LAN_CHUP_MS);
+      kiemTuyen(j);
+      return;
+    }
+  }
+  dd.tGiay = Math.min(moi, T[n]);
+  if (moi >= T[n]) denNoi();
+}
+
+async function kiemTuyen(j) {
+  const t = dd.t;
+  dd.cho = true;
+  const hoi = { canh_vua_qua: t.canh[j], canh_con_lai: t.canh.slice(j + 1), den: dd.den, luc: dinhLuc(dd.mocMs + dd.tGiay * 1000),
+                mua_mm: dd.mua_mm, trieu_cuong: dd.trieu_cuong };
+  try {
+    const kq = await goi('/api/tinh-lai', hoi);
+    if (!dd) return;
+    if (kq.doi) {
+      dd.tichGiay += dd.tGiay;
+      dd.tichMet += dd.lkMet[j + 1];
+      dd.daDi.push(...dd.diem.slice(0, j + 2));
+      dd.soDoi++;
+      napTuyenDanDuong(kq.dan_duong);
+      thongBao(kq.ly_do === 'duong_dong'
+        ? 'Đường phía trước vừa đóng, đã đổi tuyến. Còn dự kiến ' + so1(kq.phut_moi) + ' phút.'
+        : 'Số đo mới lúc ' + kq.lan_chup.slice(11, 16) + ': đổi tuyến, còn dự kiến ' + so1(kq.phut_moi) + ' phút thay vì ' + so1(kq.phut_cu) + '.');
+      const lanNay = dd.soDoi;
+      setTimeout(() => { if (dd && dd.soDoi === lanNay) thongBao(''); }, 6000);
+    } else if (!kq.het_du_lieu) {
+      t.du_kien.splice(j + 1, t.du_kien.length, ...kq.du_kien);
+      t.r_biet.splice(j + 1, t.r_biet.length, ...kq.r_biet);
+      dd.lkDuKien = coSo(t.du_kien);
+      veTuyenDanDuong();
+      if (kq.ket_dong) thongBao('Đường phía trước đang đóng và không còn đường tránh.');
+    }
+  } catch (e) {
+    thongBao('Không kiểm được số đo mới: ' + e.message);
+  }
+  if (dd) { dd.cho = false; dd.truoc = performance.now(); }
+}
+
+function veXe(dt) {
+  const v = viTri(dd.tGiay);
+  dd.xe.setLngLat(v.p);
+  const dich = huongTu(v.p, diemTheoMet(v.m + 30));
+  const lech = (dich - dd.huong + 540) % 360 - 180;
+  dd.huong = (dd.huong + lech * (1 - Math.exp(-dt * (2 + dd.toc / 8))) + 360) % 360;
+  dd.xe.setRotation(dd.huong);
+  if (!dd.xong) map.jumpTo({ center: v.p, bearing: dd.huong });
+}
+
+function veMui(kieu) {
+  const nen = 'stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"';
+  if (kieu === 'quay_dau') return `<svg viewBox="0 0 24 24" ${nen}><path d="M9 21V9a4 4 0 0 1 8 0v7"/><path d="M13 13l4 4 4-4"/></svg>`;
+  if (kieu === 'den_noi') return `<svg viewBox="0 0 24 24" ${nen}><path d="M12 21s7-6.5 7-11.5A7 7 0 0 0 5 9.5C5 14.500 12 21 12 21z"/><circle cx="12" cy="9.500" r="2"/></svg>`;
+  if (kieu === 'vong_xoay' || kieu === 'ra_vong_xoay') return `<svg viewBox="0 0 24 24" ${nen}><path d="M12 22v-6"/><circle cx="12" cy="10" r="5"/><path d="M15.500 6.500l3-3M15 3.500h3.500V7"/></svg>`;
+  return `<svg viewBox="0 0 24 24" ${nen} style="transform:rotate(${MUI_TEN[kieu] || 0}deg)"><path d="M12 21V4"/><path d="M5 11l7-7 7 7"/></svg>`;
+}
+
+function veChu() {
+  const v = viTri(dd.tGiay), t = dd.t;
+  const moc = dd.mocMs + dd.tGiay * 1000;
+  // Bước kế tiếp: bước đầu tiên còn ở phía trước xe.
+  while (dd.buocSau < t.buoc.length - 1 && t.buoc[dd.buocSau].tai_m <= v.m + 1) dd.buocSau++;
+  const b = t.buoc[dd.buocSau], sau = t.buoc[dd.buocSau + 1];
+  if ($('dd-mui').dataset.kieu !== b.kieu) { $('dd-mui').dataset.kieu = b.kieu; $('dd-mui').innerHTML = veMui(b.kieu); }
+  $('dd-xa').textContent = dinhKm(Math.max(0, b.tai_m - v.m));
+  $('dd-chi').textContent = b.chu;
+  $('dd-sau').textContent = sau && sau.kieu !== 'den_noi' && sau.tai_m - b.tai_m < 200 ? 'Sau đó: ' + sau.chu : '';
+  const D = dd.lkDuKien;
+  const con = D[D.length - 1] - D[v.j] - v.f * t.du_kien[v.j];
+  $('dd-con-phut').textContent = 'Còn ' + (con < 60 ? '< 1' : Math.round(con / 60)) + ' phút';
+  $('dd-con-km').textContent = dinhKm(dd.lkMet[dd.lkMet.length - 1] - v.m);
+  $('dd-den-luc').textContent = dinhGio(moc + con * 1000);
+  const hien = t.ten_doan.filter(x => x[0] <= v.m).pop();
+  const kmh = t.giay[v.j] > 0 ? t.dai[v.j] / t.giay[v.j] * 3.6 : 0;
+  const nguon = ['số đo thật', 'ước lượng vì đoạn này không có số đo', 'hết số đo, dùng số cuối'][t.nguon[v.j]];
+  $('dd-dang').textContent = (hien && hien[1] ? hien[1] + ' · ' : '') + Math.round(kmh) + ' km/h (' + nguon + ') · Giờ trong dữ liệu ' + dinhLuc(moc).slice(5, 16).replace('T', ' ')
+    + (dd.cho ? ' · đang kiểm số đo mới…' : '');
+  const daDi = dd.daDi.concat(dd.diem.slice(0, v.j + 1), [v.p]);
+  map.getSource('dd-da-di').setData(tapHop(daDi.length > 1 ? [{ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: daDi } }] : []));
+}
+
+function denNoi() {
+  dd.xong = true;
+  veChu();
+  const tong = (dd.tichGiay + dd.tGiay) / 60, km = (dd.tichMet + dd.lkMet[dd.lkMet.length - 1]) / 1000;
+  $('dd-xa').textContent = 'Đã đến nơi';
+  $('dd-chi').textContent = '';
+  $('dd-sau').textContent = '';
+  $('dd-so').hidden = true;
+  $('dd-dang').hidden = true;
+  $('dd-tong').hidden = false;
+  $('dd-tong').innerHTML = `Xe ảo chạy hết <b>${so1(tong)} phút</b>, ${so1(km)} km. Lúc xuất phát dự kiến ${so1(dd.duKienDau / 60)} phút. Đổi tuyến ${dd.soDoi} lần.`;
+  $('dd-dung').hidden = true;
+  $('dd-ket').textContent = 'Về màn hình tuyến';
+  thongBao('');
+}
+
+function ketThucDanDuong() {
+  if (!dd) return;
+  cancelAnimationFrame(dd.raf);
+  dd.xe.remove();
+  dd = null;
+  ['dd-tren', 'dd-duoi', 'dd-tb'].forEach(id => { $(id).hidden = true; });
+  Object.values(nhan).forEach(m => m && m.setDraggable(true));
+  ['dd-tuyen', 'dd-da-di'].forEach(id => map.getSource(id).setData(RONG));
+  $('khung').classList.remove('dang-di');
+  map.resize();
+  map.setPadding({ top: 0, bottom: 0, left: 0, right: 0 });
+  map.jumpTo({ pitch: 0, bearing: 0, zoom: 13 });
+  map.setMaxBounds(vungDuLieu ? khungKeo(vungDuLieu) : null);
+  veTuyen();
+  chonTuyen(tuyenChon);
+  const r = window.kqHienTai && window.kqHienTai.phuong_an[tuyenChon];
+  if (r) {
+    const b = new maplibregl.LngLatBounds();
+    lngLat(r.toa_do).forEach(p => b.extend(p));
+    map.fitBounds(b, { padding: 60, animate: false });
+  }
+}
+
+// Khung giới hạn kéo bản đồ: vùng dữ liệu nới thêm 50% mỗi phía.
+function khungKeo(b) {
+  const dx = (b.getEast() - b.getWest()) * 0.5, dy = (b.getNorth() - b.getSouth()) * 0.5;
+  return [[b.getWest() - dx, b.getSouth() - dy], [b.getEast() + dx, b.getNorth() + dy]];
+}
+
+// ── Nút bấm ──
+$('xoa').onclick = () => {
+  thuTu++;
+  ['di', 'den'].forEach(k => { if (nhan[k]) nhan[k].remove(); nhan[k] = null; diem[k] = null; });
+  xoaKetQua();
+  xoaKhac();
+  trangThai('');
+  $('tuyen-khac').disabled = true;
+};
+$('doi-chieu').onclick = () => {
+  if (!diem.di || !diem.den) return;
+  const a = diem.di, b = diem.den;
+  datDiem('di', b); datDiem('den', a);
+  tinhTuyen();
+};
+$('tuyen-khac').onclick = tuyenKhac;
+$('bat-dau').onclick = batDauDanDuong;
+$('dd-ket').onclick = ketThucDanDuong;
+$('dd-dung').onclick = () => { dd.dung = !dd.dung; $('dd-dung').textContent = dd.dung ? 'Chạy tiếp' : 'Tạm dừng'; };
+$('lop-ket').onchange = veKet;
+$('lop-ngap').onchange = veNgap;
+['ngay', 'gio'].forEach(id => { $(id).onchange = () => { tinhTuyen(); veKet(); }; });
+['mua', 'trieu'].forEach(id => { $(id).onchange = tinhTuyen; });
+$('moi-nhat').onclick = () => { datMoiNhat(); tinhTuyen(); veKet(); };
+
+function datMoiNhat() {
+  $('ngay').value = window.moiNhat.slice(0, 10);
+  $('gio').value = window.moiNhat.slice(11, 16);
+}
+
+(async function khoiDong() {
+  const tt = await goi('/api/thong-tin');
+  window.moiNhat = tt.moi_nhat;
+  tt.ngay.forEach(n => { const op = document.createElement('option'); op.value = n; op.textContent = n; $('ngay').append(op); });
+  datMoiNhat();
+  await taoBanDo();
+  const [nam, tay, bac, dong] = tt.vung;
+  vungDuLieu = new maplibregl.LngLatBounds([tay, nam], [dong, bac]);
+  map.getSource('vung').setData(duong([[nam, tay], [nam, dong], [bac, dong], [bac, tay], [nam, tay]]));
+  map.setMaxBounds(khungKeo(vungDuLieu));
+  // Khung bản đồ có thể chưa có kích thước lúc tải trang (panel đang ẩn): chờ có kích thước mới căn, và căn lại khi đổi cỡ.
+  let daCan = false;
+  const can = () => {
+    map.resize();
+    const k = map.getContainer();
+    if (!daCan && k.clientWidth > 0 && k.clientHeight > 0) { daCan = true; map.fitBounds(vungDuLieu, { padding: 20, animate: false }); }
+  };
+  new ResizeObserver(can).observe($('map'));
+  can();
+  if (!$('ghi-chu').textContent) $('ghi-chu').textContent = 'Khung đứt nét là vùng có dữ liệu. "Dự kiến" chỉ dùng số đo tới lúc đi; "Thực tế" chạy lại theo tốc độ TomTom đo sau đó.';
+})().catch(e => trangThai(e.message, true));
+</script>
+</body>
+</html>

@@ -136,6 +136,14 @@
 
 - Overpass (OpenStreetMap) trả 504 khi tải cả khu trung tâm một lần → `tai_osm.py` chia 2×2 ô + máy chủ dự phòng.
 - Thời tiết lưu trữ Open-Meteo lưới thô: 5 điểm trong thành phố chỉ ra 3 chuỗi khác nhau.
+- Ảnh bản đồ "tải được" (naturalWidth 256) chưa chắc đúng: CARTO trả ảnh hợp lệ nhưng in chữ "API KEY REQUIRED". Giao diện phải chụp màn hình nhìn tận mắt, đừng chỉ đếm ảnh tải xong (07/11).
+- `tile.openstreetmap.org` không kết nối được từ máy này (curl mã 7), đổi trình duyệt không giúp gì. Máy khác có thể vẫn vào được, nên phải thử từ đúng máy đang dùng.
+- `nominatim.openstreetmap.org` cũng không kết nối được từ máy này, giống máy chủ ảnh OSM (07/11). Photon và TomTom Search thì được.
+- Đổi địa chỉ thành tọa độ có thể trả kết quả sai xa vài km mà không báo gì: phải cho người dùng chọn và nhìn ghim trên bản đồ, không tự lấy kết quả đầu tiên (xem nhật ký 07/11).
+- Chỉ dẫn đường: unit test đạt chưa đủ, phải đọc chỉ dẫn của tuyến thật. Lỗi "Đi tiếp" ở chỗ rẽ 123° chỉ lộ ra khi đọc (07/11).
+- CSS đặt `display` cho phần tử thì đè thuộc tính `hidden`: trang web cần `[hidden] { display: none !important; }`.
+- Số suy ra từ vài tuyến tự chọn dễ phóng đại: 4 tuyến cho thấy chỉ dẫn gấp 2–4 lần, đo 85 cặp thật chỉ hơn 27%. Có lo ngại thì đo trên bộ cặp điểm cố định trước khi báo.
+- Sửa `dich_vu.py`, `chi_dan.py`, `may_chu.py` phải khởi động lại API (`preview_stop` rồi `preview_start` tên `thuc-tap-web`); sửa `index.html` chỉ cần tải lại trang.
 
 ## Bài học mang sang từ đồ án chuyên ngành
 

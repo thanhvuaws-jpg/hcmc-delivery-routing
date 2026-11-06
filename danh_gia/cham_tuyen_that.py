@@ -22,9 +22,13 @@ nhất ở ≥ 80% chuyến và nhanh hơn trung bình ≥ 5%.
 Giới hạn: hồ sơ giờ dùng cho cạnh KHÔNG có số đo được dựng từ cùng dữ liệu (chỉ ảnh hưởng hẻm/đường nhỏ,
 cả 4 phương án cùng chịu). Số đo thật của cạnh có TomTom thì C/D chỉ biết tới lúc t.
 
-Chạy:  python cham_tuyen_that.py [2026-10-30] [--khat-khe] [--nguong=60]
+Tổng hợp nhiều ngày + khoảng tin cậy + kiểm định: tong_hop_cham.py.
+
+Chạy:  python cham_tuyen_that.py [2026-10-30] [--diem=zenodo] [--khat-khe] [--nguong=60]
+       --diem=zenodo: cặp đi–đến là điểm giao hàng thật (D13) thay vì 10 địa danh chọn tay.
        --khat-khe: cạnh không có số đo lúc chấm coi chậm hơn hồ sơ 30% (kiểm kết luận có còn đứng
-       khi hẻm thực tế chậm hơn ước lượng — tuyến C/D hay luồn hẻm nên dễ được chấm ưu ái).
+       khi hẻm thực tế chậm hơn ước lượng — tuyến C/D hay luồn hẻm nên dễ được chấm ưu ái). Phương án A–D
+       đã có sẵn số này ở cột phut_kk_* trong mọi lần chạy; cờ này chỉ cần khi muốn E.
        --nguong=N: ngưỡng đổi tuyến của E (giây), mặc định NGUONG_DOI_S.
        --phat-re-trai=N: phạt rẽ trái qua trục lớn của D/E (giây), mặc định ba_phuong_an.PHAT_RE_TRAI_S.
 Ra:    danh_gia/ket_qua/cham_tuyen_<ngày>.csv + tóm tắt in ra màn hình
@@ -43,9 +47,11 @@ sys.path.insert(0, os.path.join(GOC, 'dinh_tuyen'))
 from ba_phuong_an import PHAT_RE_TRAI_S, DinhTuyen  # noqa: E402
 from kiem_tra_tuan1 import DIA_DIEM  # noqa: E402
 
-GIO_XUAT_PHAT = ['06:30', '07:30', '08:30', '10:00', '12:00', '14:00', '15:30']
+GIO_XUAT_PHAT = ['06:30', '07:30', '08:30', '10:00', '12:00', '14:00', '15:30', '17:00', '18:00', '19:30']
 PHAT_DONG_S = 300.0
 HE_SO_KHONG_DO = 1.0          # phép thử khắt khe: --khat-khe -> 0,7 (cạnh không có số đo chậm hơn hồ sơ 30%)
+HE_SO_KHAT_KHE = 0.7          # cột phut_kk_* tính sẵn mức này cho A–D trong mọi lần chạy
+SO_CAP_ZENODO = 90
 # E chỉ đổi tuyến khi đỡ ≥ 60 s (QĐ-013). Chấm 30/10: ngưỡng 0 nhanh hơn chút (D−2,2% so với −1,6%) nhưng
 # đổi tuyến 1.227 lần (tới 6 lần/chuyến, mỗi lần chỉ đỡ 0,19 phút); 60 s giữ 74% phần tiết kiệm với 147 lần
 # đổi (tối đa 2/chuyến) — người chạy xe theo được.
@@ -54,11 +60,25 @@ R_SAN, V_SAN = 0.1, 3.0
 RA = os.path.join(GOC, 'danh_gia', 'ket_qua')
 
 
-def nap_quan_sat(ngay, tu='06:00'):
+def cap_zenodo(so_cap=SO_CAP_ZENODO):
+    """Cặp đi–đến là điểm giao hàng THẬT (D13), cách nhau 1,5–8 km đường chim bay; cố định qua các ngày (hạt 42)."""
+    diem = pd.read_parquet(os.path.join(GOC, 'du_lieu', 'bac', 'zenodo_diem.parquet'))
+    diem = diem[diem['trong_vung']][['lat', 'lon']].to_numpy()
+    rng = np.random.default_rng(42)
+    cap = []
+    while len(cap) < so_cap:
+        a, b = diem[rng.choice(len(diem), 2, replace=False)]
+        km = np.hypot((a[0] - b[0]) * 110.574, (a[1] - b[1]) * 111.320 * np.cos(np.radians(10.78)))
+        if 1.5 <= km <= 8.0:
+            cap.append(((f'z{len(cap)}_di', tuple(a)), (f'z{len(cap)}_den', tuple(b))))
+    return cap
+
+
+def nap_quan_sat(ngay, tu='06:00', den='22:00'):
     """Ma trận (lần chụp × cạnh): r đo được (NaN nếu không đo / đóng hết), đóng hết?, phần đóng."""
     s = pd.read_parquet(os.path.join(GOC, 'du_lieu', 'bac', 'tomtom_canh', f'{ngay}.parquet'),
                         columns=['khung', 'chi_so', 'muc', 'phu', 'phu_dong'])
-    s = s[s['khung'] >= pd.Timestamp(f'{ngay} {tu}')]
+    s = s[(s['khung'] >= pd.Timestamp(f'{ngay} {tu}')) & (s['khung'] < pd.Timestamp(f'{ngay} {den}'))]
     khung = np.sort(s['khung'].unique())
     k = np.searchsorted(khung, s['khung'].to_numpy())
     i = s['chi_so'].to_numpy()
@@ -94,16 +114,17 @@ def main():
         k = int(np.searchsorted(khung, np.datetime64(t), side='right')) - 1
         return k if 0 <= k < len(khung) and (t - khung[k]).total_seconds() < 600 else None
 
-    def buoc(i, t, k):
-        """Xe vào cạnh i lúc t (lần chụp k): (giây thật qua cạnh, mét chấm bằng số đo thật, 1 nếu cạnh đang đóng)."""
+    def buoc(i, t, k, hs=he_so):
+        """Xe vào cạnh i lúc t (lần chụp k): (giây thật qua cạnh, mét chấm bằng số đo thật, 1 nếu cạnh đang đóng).
+        hs: hệ số nhân hồ sơ cho cạnh không có số đo."""
         dong = int(DONG[k, i])
         r = R[k, i]
         do = dai[i] if r == r else 0.0
         if r != r:
-            r = r_ho_so[t.hour, i] * he_so
+            r = r_ho_so[t.hour, i] * hs
         return dai[i] / (max(v_trong[i] * r, V_SAN) / 3.6) * (1 + PD[k, i]) + PHAT_DONG_S * dong, do, dong
 
-    def cham(canh, t0):
+    def cham(canh, t0, hs=he_so):
         """Phút thật, tỉ lệ chiều dài chấm bằng số đo thật, số lần vào cạnh đóng. None nếu ra ngoài dữ liệu."""
         tau, co_do, vao_dong = 0.0, 0.0, 0
         for i in canh:
@@ -111,7 +132,7 @@ def main():
             k = lan_chup(t)
             if k is None:
                 return None
-            s, m, dong = buoc(i, t, k)
+            s, m, dong = buoc(i, t, k, hs)
             tau, co_do, vao_dong = tau + s, co_do + m, vao_dong + dong
         return tau / 60, co_do / max(sum(dai[i] for i in canh), 1), vao_dong
 
@@ -169,7 +190,8 @@ def main():
                     c['so_doi'] += 1
                 c['k_biet'], c['cho'] = k, None
 
-    cap = list(itertools.permutations(DIA_DIEM.items(), 2))
+    dung_zenodo = '--diem=zenodo' in sys.argv
+    cap = cap_zenodo() if dung_zenodo else list(itertools.permutations(DIA_DIEM.items(), 2))
     hang = []
     for gio in GIO_XUAT_PHAT:
         t0 = pd.Timestamp(f'{ngay} {gio}')
@@ -202,6 +224,11 @@ def main():
                 dong[f'phut_{k}'], dong[f'do_that_{k}'], dong[f'vao_dong_{k}'] = c
                 dong[f'm_{k}'] = r['dai_m']
                 dong[f're_trai_{k}'] = r['so_re_trai_lon']
+                kk = cham(r['canh'], t0, HE_SO_KHAT_KHE)
+                if kk is None:
+                    ok = False
+                    break
+                dong[f'phut_kk_{k}'] = kk[0]
             c = e.get((a, b))
             if not ok or c is None or c['hong'] or not c['xong']:
                 continue
@@ -214,7 +241,8 @@ def main():
 
     kq = pd.DataFrame(hang)
     os.makedirs(RA, exist_ok=True)
-    hau_to = ('_khat_khe' if he_so != 1 else '') + (f'_nguong{nguong:.0f}' if nguong != NGUONG_DOI_S else '') + \
+    hau_to = ('_zenodo' if dung_zenodo else '') + ('_khat_khe' if he_so != 1 else '') + \
+        (f'_nguong{nguong:.0f}' if nguong != NGUONG_DOI_S else '') + \
         (f'_retrai{d.phat_re_trai_s:.0f}' if d.phat_re_trai_s != PHAT_RE_TRAI_S else '')
     kq.to_csv(os.path.join(RA, f'cham_tuyen_{ngay}{hau_to}.csv'), index=False, encoding='utf-8-sig')
     print(f'he so canh khong co so do: {he_so}; nguong doi tuyen E: {nguong:.0f}s')

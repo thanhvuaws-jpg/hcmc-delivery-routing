@@ -15,8 +15,9 @@ Dữ liệu còn ít ngày thì số chỉ để KIỂM ĐƯỜNG ỐNG, chưa k
 
 Mỗi vòng lưu điểm dừng: máy tắt / ngủ giữa chừng thì chạy lại với --tiep (cùng dữ liệu).
 
-Chạy:  python hoc_sau_hcm.py [gwn|gru] [--ho-so] [--so-vong=200] [--tiep]
+Chạy:  python hoc_sau_hcm.py [gwn|gru] [--ho-so] [--them-kenh] [--so-vong=200] [--tiep]
        --ho-so: học phần chênh so với hồ sơ lịch sử của đoạn ở giờ đích (ho_so_lich_su.py, QĐ-020).
+       --them-kenh (cần --ho-so): thêm sự cố, phần đường đóng, mưa dự báo, tình trạng chung — để so công bằng với GBM.
 Ra:    mo_hinh/ket_qua/hoc_sau/hcm_<mô hình>_<ngày cuối của dữ liệu>.json + .pt — giữ lại từng lần train để
        so độ ổn định qua các tuần (tính từ dữ liệu TomTom — không lên git)
 """
@@ -34,11 +35,13 @@ import torch.nn as nn
 
 from ho_so_lich_su import ho_so
 from hoc_sau import GRUNut, GraphWaveNet, ma_tran_thua
+from dac_trung import chung_toan_mang
 from moc_so_sanh import KHOANG_HO, TY_LE_HOC, danh_gia, mae_theo_ngay
 
 GOC = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 VANG = os.path.join(GOC, 'du_lieu', 'vang')
 RA_THU_MUC = os.path.join(GOC, 'mo_hinh', 'ket_qua', 'hoc_sau')
+COT_THEM = ('su_co', 'tre_su_co_s', 'ty_le_dong', 'mua_db_1')
 VAO, RA = 8, 4
 BUOC = {'15': 0, '30': 1, '60': 3}              # chỉ số khung ra (0 = 15 phút tới)
 LO = 4                                          # N lớn: lô nhỏ cho vừa GPU 4 GB
@@ -46,15 +49,21 @@ KIEN_NHAN = 20
 TY_LE_KIEM_DINH = 0.1
 
 
-def nap_vang():
-    """Ma trận r (khung × đoạn), mốc khung, mã đoạn — khung = mọi khung có dòng trong tầng vàng (như moc_so_sanh)."""
-    d = pd.concat([pd.read_parquet(t, columns=['khung', 'doan', 'r'])
+def nap_vang(cot_them=()):
+    """Ma trận r (khung × đoạn), mốc khung, mã đoạn — khung = mọi khung có dòng trong tầng vàng (như moc_so_sanh);
+    kèm {cột: ma trận} cho các cột thêm (thiếu = NaN)."""
+    d = pd.concat([pd.read_parquet(t, columns=['khung', 'doan', 'r', *cot_them])
                    for t in sorted(glob.glob(os.path.join(VANG, '*.parquet')))], ignore_index=True)
     khung = np.sort(d['khung'].unique())
     doan = np.sort(d['doan'].unique())
+    fi, ni = np.searchsorted(khung, d['khung'].to_numpy()), np.searchsorted(doan, d['doan'].to_numpy())
     R = np.full((len(khung), len(doan)), np.nan, dtype=np.float32)
-    R[np.searchsorted(khung, d['khung'].to_numpy()), np.searchsorted(doan, d['doan'].to_numpy())] = d['r'].to_numpy()
-    return pd.DatetimeIndex(khung), doan, R
+    R[fi, ni] = d['r'].to_numpy()
+    them = {}
+    for c in cot_them:
+        them[c] = np.full(R.shape, np.nan, dtype=np.float32)
+        them[c][fi, ni] = d[c].to_numpy()
+    return pd.DatetimeIndex(khung), doan, R, them
 
 
 def do_thi(doan):
@@ -86,7 +95,10 @@ def main():
     tb_ = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     t_bat_dau = time.time()
 
-    khung, doan, R = nap_vang()
+    dung_them = '--them-kenh' in sys.argv
+    if dung_them and not dung_ho_so:
+        sys.exit('--them-kenh can --ho-so')
+    khung, doan, R, them = nap_vang(COT_THEM if dung_them else ())
     T, N = R.shape
     A, so_canh = do_thi(doan)
     cat = int(T * TY_LE_HOC)
@@ -116,6 +128,17 @@ def main():
                              np.full((RA, N), np.nan, np.float32)])
         Hv = torch.tensor(Hp, device=tb_)
 
+    # --them-kenh: sự cố đang ghi, phần đường đóng, mưa dự báo giờ kế (đều biết tại khung t), tình trạng chung toàn mạng.
+    Tv = None
+    if dung_them:
+        H = Hp[VAO - 1:VAO - 1 + T]
+        chung = np.nan_to_num(chung_toan_mang(R, H) / ls)
+        kenh_them = [(them['su_co'] > 0).astype(np.float32), np.log1p(np.nan_to_num(them['tre_su_co_s'])) / 8,
+                     np.nan_to_num(them['ty_le_dong']), np.clip(np.nan_to_num(them['mua_db_1']), 0, 10) / 10,
+                     np.broadcast_to(chung[:, None], R.shape)]
+        Tv = torch.tensor(np.stack([np.concatenate([np.zeros((VAO - 1, N), np.float32), k.astype(np.float32),
+                                                    np.zeros((RA, N), np.float32)]) for k in kenh_them]), device=tb_)
+
     def lo(mau):
         """Mẫu (khung t) -> vào (B, số kênh, N, VAO); ra (B, RA, N) theo r (NaN = thiếu); mức nền cộng vào đầu ra."""
         s = torch.as_tensor(mau, device=tb_)[:, None] + buoc
@@ -128,6 +151,8 @@ def main():
         if dung_ho_so:
             kenh.append(torch.nan_to_num((x - Hv[s[:, :VAO]]) / ls, nan=0.0))
             nen = torch.nan_to_num(Hv[s[:, VAO:]], nan=tb)
+        if dung_them:
+            kenh.extend(Tv[j][s[:, :VAO]] for j in range(Tv.shape[0]))
         return torch.stack(kenh, dim=1).transpose(2, 3), y, nen
 
     def mae_co_nhan(du, y):
@@ -143,7 +168,7 @@ def main():
     mau_hoc, mau_kd = hoc_tat[:-so_kd], hoc_tat[-so_kd:]
     mau_kt = np.arange(dau_kiem, T)
 
-    so_kenh = 5 if dung_ho_so else 4
+    so_kenh = (5 if dung_ho_so else 4) + (len(COT_THEM) + 1 if dung_them else 0)
     if ten_mh == 'gru':
         mh = GRUNut(vao=so_kenh, ra=RA)
     else:
@@ -151,6 +176,8 @@ def main():
         mh = GraphWaveNet(cac_A, N, vao=so_kenh, ra=RA, khoi=3, tu_hoc=False)
     if dung_ho_so:
         ten_mh += '_ho_so'
+    if dung_them:
+        ten_mh += '_them'
     mh = mh.to(tb_)
     toi_uu = torch.optim.Adam(mh.parameters(), lr=1e-3, weight_decay=1e-4)
     print(f'{ten_mh}: {sum(p.numel() for p in mh.parameters()):,} tham so; mau hoc/kiem dinh/kiem tra '

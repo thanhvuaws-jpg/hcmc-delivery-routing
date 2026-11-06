@@ -6,7 +6,7 @@ So 5 cách, cùng một tập kiểm tra chia THEO THỜI GIAN (KE_HOACH_DU_LIEU
   tb_1h        y(t+h) = TB r của 1 giờ gần nhất
   lich_su      y(t+h) = TB r theo (đoạn, thứ, ô 15 phút) trên phần học — lớp LichSu, mốc của tiêu chí ≥ 10%
   gbm          HistGradientBoosting (scikit-learn) học PHẦN THAY ĐỔI y − r từ mọi đặc trưng tầng vàng
-  gbm_ls       gbm + hồ sơ lịch sử của đoạn ở giờ đích (ho_so_lich_su.py, đã chống rò rỉ, QĐ-020)
+  gbm_ls       gbm + hồ sơ lịch sử ở giờ đích và tình trạng chung toàn mạng (dac_trung.py, QĐ-020, QĐ-021)
 Chia: 70% khung thời gian đầu để học, chừa KHOẢNG_HO khung, phần sau để kiểm tra (nhãn 60 phút
 của khung học cuối không được rơi vào thời gian kiểm tra).
 
@@ -16,7 +16,6 @@ Kết quả ghi mo_hinh/ket_qua/moc_<ngày chạy>.json — dữ liệu ít ngà
 
 Chạy:  python moc_so_sanh.py
 """
-import glob
 import json
 import os
 import sys
@@ -27,14 +26,14 @@ import pandas as pd
 from sklearn.ensemble import HistGradientBoostingRegressor
 from sklearn.metrics import f1_score
 
-from ho_so_lich_su import ho_so
+from dac_trung import GOC, KHOANG_HO, NHAN, TY_LE_HOC, BangHoc  # noqa: F401 (KHOANG_HO, TY_LE_HOC: hoc_sau_hcm dùng)
 
-GOC = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
-VANG = os.path.join(GOC, 'du_lieu', 'vang')
 RA = os.path.join(GOC, 'mo_hinh', 'ket_qua')
-TY_LE_HOC = 0.7
-KHOANG_HO = 4                   # 4 khung = 60 phút
-NHAN = {'15': 'y_15', '30': 'y_30', '60': 'y_60'}
+
+
+def tao_gbm_chung(cot_loai):
+    return HistGradientBoostingRegressor(max_iter=400, learning_rate=0.05, max_leaf_nodes=63, min_samples_leaf=200,
+                                         l2_regularization=1.0, categorical_features=[cot_loai], random_state=42)
 
 
 def muc(r):
@@ -91,61 +90,32 @@ class LichSu:
 def main():
     sys.stdout.reconfigure(encoding='utf-8')
     t0 = time.time()
-    d = pd.concat([pd.read_parquet(t) for t in sorted(glob.glob(os.path.join(VANG, '*.parquet')))],
-                  ignore_index=True)
-    khung = np.sort(d['khung'].unique())
-    cat = int(len(khung) * TY_LE_HOC)
-    het_hoc, dau_kiem = khung[cat - 1], khung[min(cat + KHOANG_HO, len(khung) - 1)]
-    hoc, kiem = d[d['khung'] <= het_hoc], d[d['khung'] >= dau_kiem]
-    bo = {'khung', 'doan', *NHAN.values()}
-    # Cột chưa có ít nhất 2 giá trị trong phần học (vd r_hom_qua khi chưa đủ 1 ngày) thì bỏ —
-    # scikit-learn không chia khoảng được, và cột đó cũng chưa có gì để học.
-    bo_vi_trong = [c for c in d.columns if c not in bo and hoc[c].nunique(dropna=True) < 2]
-    dac_trung = [c for c in d.columns if c not in bo and c not in bo_vi_trong]
-    if bo_vi_trong:
-        print('bo cot chua co du lieu de hoc:', bo_vi_trong)
+    bang = BangHoc()
+    d, khung, hoc, kiem = bang.d, bang.khung, bang.hoc, bang.kiem
+    if bang.bo_vi_trong:
+        print('bo cot chua co du lieu de hoc:', bang.bo_vi_trong)
     print(f'{len(d):,} dong, {len(khung)} khung ({khung[0]} -> {khung[-1]})')
-    print(f'hoc: {len(hoc):,} dong toi {het_hoc} | kiem: {len(kiem):,} dong tu {dau_kiem} | {len(dac_trung)} dac trung')
+    print(f'hoc: {len(hoc):,} dong toi {bang.het_hoc} | kiem: {len(kiem):,} dong tu {bang.dau_kiem} | '
+          f'{len(bang.dac_trung)} dac trung')
 
-    kq = {'tao_luc': time.strftime('%Y-%m-%d %H:%M:%S'), 'hoc_toi': str(het_hoc), 'kiem_tu': str(dau_kiem),
-          'so_dong_hoc': len(hoc), 'so_dong_kiem': len(kiem), 'dac_trung': dac_trung, 'ket_qua': {}}
+    kq = {'tao_luc': time.strftime('%Y-%m-%d %H:%M:%S'), 'hoc_toi': str(bang.het_hoc), 'kiem_tu': str(bang.dau_kiem),
+          'so_dong_hoc': len(hoc), 'so_dong_kiem': len(kiem), 'dac_trung': bang.dac_trung, 'ket_qua': {}}
     lich_su = LichSu(hoc)
-    # Hồ sơ lịch sử (đã loại khung của chính dòng, xem ho_so_lich_su.py) cho gbm_ls.
-    doan = np.sort(d['doan'].unique())
-    fi, ni = np.searchsorted(khung, d['khung'].to_numpy()), np.searchsorted(doan, d['doan'].to_numpy())
-    R = np.full((len(khung), len(doan)), np.nan, dtype=np.float32)
-    R[fi, ni] = d['r'].to_numpy()
-    H = ho_so(R, pd.DatetimeIndex(khung), cat)
-    del R
 
     def tao_gbm():
-        return HistGradientBoostingRegressor(max_iter=400, learning_rate=0.05, max_leaf_nodes=63,
-                                             min_samples_leaf=200, l2_regularization=1.0,
-                                             categorical_features=[dac_trung.index('loai')], random_state=42)
+        return tao_gbm_chung(bang.dac_trung.index('loai'))
 
     for h, y in NHAN.items():
-        a = hoc[hoc[y].notna() & hoc['r'].notna()]
-        b = kiem[kiem[y].notna() & kiem['r'].notna()]
-        X = a[dac_trung].copy()
-        Xb = b[dac_trung].copy()
-        for X_ in (X, Xb):
-            X_['loai'] = X_['loai'].cat.codes
+        a, b = bang.nhan(hoc, y), bang.nhan(kiem, y)
         dich_y = (a[y] - a['r']).to_numpy()
         m = tao_gbm()
-        m.fit(X.astype(np.float32), dich_y)
-        du = np.clip(b['r'].to_numpy() + m.predict(Xb.astype(np.float32)), 0, 1)
-        # Cùng đặc trưng + hồ sơ: mức bình thường ở giờ ĐÍCH, khoảng cách tới nó, độ lệch hiện tại so với bình thường.
-        for X_, dong in ((X, a), (Xb, b)):
-            vt = dong.index.to_numpy()
-            dich = fi[vt] + int(h) // 15
-            h_dich = np.where(dich < len(khung), H[np.minimum(dich, len(khung) - 1), ni[vt]], np.nan)
-            X_['r_ls_dich'] = h_dich
-            X_['ls_tru_r'] = h_dich - dong['r'].to_numpy()
-            X_['lech_ls'] = dong['r'].to_numpy() - H[fi[vt], ni[vt]]
+        m.fit(bang.X(a, int(h), co_ho_so=False), dich_y)
+        du = np.clip(b['r'].to_numpy() + m.predict(bang.X(b, int(h), co_ho_so=False)), 0, 1)
+        # Cùng đặc trưng + hồ sơ lịch sử + tình trạng chung toàn mạng (dac_trung.py).
         m = tao_gbm()
-        m.fit(X.astype(np.float32), dich_y)
-        du_ls = np.clip(b['r'].to_numpy() + m.predict(Xb.astype(np.float32)), 0, 1)
-        del X, Xb, m
+        m.fit(bang.X(a, int(h)), dich_y)
+        du_ls = np.clip(b['r'].to_numpy() + m.predict(bang.X(b, int(h))), 0, 1)
+        del m
         gio = b['khung'].dt.hour.to_numpy()
         yt, r = b[y].to_numpy(), b['r'].to_numpy()
         ls, dung_thu = lich_su.du_bao(b, int(h))

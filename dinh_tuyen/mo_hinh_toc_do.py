@@ -130,6 +130,20 @@ class MoHinhTocDo:
         m.co_so_do = dem_c.sum(axis=0) > 0   # cạnh từng có số đo TomTom (còn lại: hẻm/đường nhỏ, ước lượng)
         return m
 
+    def luu(self, tep):
+        """Lưu phần hồ sơ (v_trống, r theo giờ) — API đọc tệp này thay vì tính lại từ toàn bộ tầng bạc."""
+        np.savez_compressed(tep, v_trong=self.v_trong, r_gio=self.r_gio, co_so_do=self.co_so_do,
+                            gio_uoc_luong=np.array(self.gio_uoc_luong, dtype=np.int64))
+
+    @classmethod
+    def doc(cls, tep):
+        """Đọc hồ sơ đã lưu; chưa có tình trạng hiện tại (đặt sau bằng DinhTuyen.dat_tinh_trang)."""
+        with np.load(tep) as z:
+            m = cls(z['v_trong'], z['r_gio'])
+            m.co_so_do = z['co_so_do']
+            m.gio_uoc_luong = z['gio_uoc_luong'].tolist()
+        return m
+
     def km_h(self, i, gio, dung_hien_tai=False):
         """Tốc độ dự kiến (km/h) của cạnh i ở giờ `gio` (0–23)."""
         if dung_hien_tai and self.r_hien_tai is not None:

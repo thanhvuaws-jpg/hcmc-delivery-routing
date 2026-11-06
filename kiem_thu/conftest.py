@@ -3,5 +3,5 @@ import os
 import sys
 
 GOC = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-for thu_muc in ('dinh_tuyen', 'thu_thap', 'xu_ly', 'khai_pha', 'mo_hinh'):
+for thu_muc in ('dinh_tuyen', 'thu_thap', 'xu_ly', 'khai_pha', 'mo_hinh', os.path.join('he_thong', 'api')):
     sys.path.insert(0, os.path.join(GOC, thu_muc))

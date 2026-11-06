@@ -7,6 +7,7 @@ import pandas as pd
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'mo_hinh'))
+from dac_trung import chung_toan_mang  # noqa: E402
 from ho_so_lich_su import ho_so  # noqa: E402
 from moc_so_sanh import LichSu, danh_gia, mae_theo_ngay  # noqa: E402
 
@@ -84,6 +85,14 @@ def test_ho_so_doan_khong_co_lich_su_la_nan():
     only = np.full_like(R, np.nan)
     only[o8[0], 0] = 0.5
     assert np.isnan(ho_so(only, khung, cat=len(khung))[o8[0], 0])  # chỉ có chính nó -> bỏ đi là hết mẫu
+
+
+def test_chung_toan_mang_bo_o_thieu():
+    R = np.array([[0.5, 0.7, np.nan], [np.nan, np.nan, np.nan]], dtype=np.float32)
+    H = np.array([[0.6, 0.6, 0.9], [0.6, 0.6, 0.9]], dtype=np.float32)
+    c = chung_toan_mang(R, H)
+    assert c[0] == pytest.approx(0.0, abs=1e-6)     # (−0,1 + 0,1) / 2, ô thiếu không tính
+    assert np.isnan(c[1])                           # khung không có số đo nào
 
 
 def test_danh_gia_va_theo_ngay():

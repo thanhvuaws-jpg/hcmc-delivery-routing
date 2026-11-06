@@ -123,9 +123,10 @@ class DinhTuyen:
         return can_duoi
 
     @classmethod
-    def nap(cls, luc=None):
+    def nap(cls, luc=None, tep_ho_so=None):
+        """tep_ho_so: tệp của MoHinhTocDo.luu — bỏ qua việc tính hồ sơ từ toàn bộ tầng bạc (API, VPS)."""
         bd = BanDo.nap()
-        mh = MoHinhTocDo.nap(luc)
+        mh = MoHinhTocDo.doc(tep_ho_so) if tep_ho_so else MoHinhTocDo.nap(luc)
         n = bd.G.number_of_edges()
         ngap_mua, ngap_trieu = np.zeros(n, dtype=bool), np.zeros(n, dtype=bool)
         tep = os.path.join(GOC, 'du_lieu', 'bac', 'ngap_canh.parquet')

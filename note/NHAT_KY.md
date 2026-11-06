@@ -4,6 +4,58 @@ Mục mới nhất ở trên cùng.
 
 > 30/10/2026 11:53: các mục trong ngày từng ghi giờ ước chừng (13:00, 14:30…) — SAI, đồng hồ thật khi đó chưa tới 12:00. Đã sửa: chỉ ghi giờ có bằng chứng (giờ tệp, lệnh `date`, giờ trên AWS).
 
+## 07/11/2026 — tạm dừng, chờ lần train chính
+
+- Người dùng chốt: các việc còn dở làm tiếp khi tới lần train chính (~12–13/11).
+- Làm theo thứ tự: chạy kiểm `moc_so_sanh`, `kiem_doan_mo`, `ablation` trước (tắt API nếu thiếu RAM), rồi train chính, rồi nối dự báo vào định tuyến và chấm lại. Sau đó tới phạt đường đóng và ngập, ô nhập địa chỉ, việc tồn. Danh sách đầy đủ ở các mục dưới và QĐ-022, 023, 024.
+- Mã từ 07/11 vẫn chưa đẩy GitHub, đang chờ người dùng bảo.
+
+## 07/11/2026 (04:35) — thử nguồn nhận địa chỉ, chưa làm ô nhập
+
+- Người dùng hỏi nhập tên đường, số nhà được không. Thử 17 câu địa chỉ công khai, mốc đúng sai số ~100 m, tự chọn nên chỉ để định hướng. Script chỉ ở thư mục tạm, chưa vào dự án. TomTom tốn 17/2.500 lượt.
+
+  | kết quả | Photon (OSM) | TomTom Search |
+  |---|---|---|
+  | lệch ≤ 200 m | 10 | 10 |
+  | lệch 200 m – 1 km | 1 | 2 |
+  | sai ≥ 1 km mà vẫn trả kết quả | 2 | 4 |
+  | không tìm thấy | 4 | 1 |
+
+- Nominatim: máy này không kết nối được. Goong, Google chưa thử vì cần tài khoản và khóa.
+- Không nguồn nào nhận "243/73 Hoàng Diệu". Đồ thị có 19.943 tên, 17.653 tên hẻm, nên tự tìm hẻm trong dữ liệu của mình được (ra vị trí hẻm, không ra đúng số nhà).
+- Phát hiện khi soát kế hoạch: `dinh_tuyen/` chưa dùng mô hình dự báo, chấm tuyến vẫn dựa trên tình trạng hiện tại. Đây là phần lớn nhất còn thiếu so với tên đề tài.
+
+## 07/11/2026 (04:24) — xong chấm tuyến bộ địa danh (QĐ-023)
+
+- Bộ 10 địa danh xong: D nhanh hơn A 16,6% (CI 14,4..18,8), đạt 7/8 ngày, 16/20 khung giờ. Số chính vẫn là bộ giao hàng thật 11,4% (9,6% nếu bỏ phạt đường đóng).
+- Thiếu 144 chuyến đều đi tới Lăng Cha Cả, do đường đóng quanh nút đích. Sửa `do_ben_cham.py` in đúng chiều "điểm hòa" khi hệ số < 1.
+- CHƯA chạy: `moc_so_sanh`, `kiem_doan_mo` sau khi tách `BangHoc`, `ablation` (cần ~6 GB RAM, lúc này trống 4,3 GB vì API đang chạy cho người dùng thử web). Phải chạy trước lần train chính 12–13/11.
+
+## 07/11/2026 (→ 04:22) — chế độ dẫn đường trên web demo (QĐ-024)
+
+- Người dùng hỏi bản đồ này đi kiểu gì, rồi chốt "thêm thử đi": đường kẻ, bấm Bắt đầu, bản đồ quay theo hướng đi. Làm bản xe ảo trên web để kiểm logic trước khi vẽ app.
+- Mới: `he_thong/api/chi_dan.py`, `kiem_thu/test_chi_dan.py` (pytest toàn bộ 66/66), `danh_gia/do_phuc_tap_tuyen.py`; `dich_vu.py` thêm `_chay_lai`, `dan_duong`, `tinh_lai`; `may_chu.py` thêm `/api/dan-duong`, `/api/tinh-lai`; `/api/tuyen` trả thêm `canh`. Viết lại `he_thong/web/index.html` từ Leaflet sang MapLibre + bản đồ vector OpenFreeMap.
+- Đối chiếu với `cham_tuyen_that.py` (hai đoạn mã khác nhau): z77 01/11 19:30 đường đóng 22,0 phút, 1 lần đổi; z20 05/11 17:00 39,7 phút, 3 lần đổi; đều khớp phương án E. Bến Thành → Lăng Cha Cả 26,1 phút khớp cột "Thực tế". Tách `_chay_lai` không đổi số cũ (34,3 / 26,2 / 26,1).
+- Đã thử trên trình duyệt: bấm chuột thật chọn điểm và Bắt đầu, tạm dừng, đổi tốc độ, kết thúc giữa chừng, về màn hình tuyến, chế độ mới nhất (hết số đo), cỡ điện thoại 375×812, lớp kẹt xe, ngập, tuyến khác, mưa, đổi chiều, xóa, bấm ngoài vùng.
+- Lỗi của mình: (1) CSS `display:flex` đè thuộc tính `hidden`, ô chỉ dẫn hiện cả khi chưa bắt đầu; (2) ở tốc độ cao xe kiểm số đo trước mốc có số đo mới (19:34) vì lấy mốc theo vị trí sau bước nhảy, sửa thành nút đầu tiên sau mốc; (3) unit test đạt hết nhưng đọc chỉ dẫn tuyến thật mới thấy "Đi tiếp" ở chỗ rẽ 123°, coi "Đường X" khác "X", báo cầu và số hẻm khi đi thẳng, gọi ngã tư là vòng xoay. Đã sửa, thêm test.
+- Chưa làm: GPS thật, phát hiện lệch tuyến, giọng nói (để cho app); chưa cho bắt đầu từ bảng "tuyến khác". Chưa đẩy GitHub.
+
+## 07/11/2026 (02:42 → 02:45) — tổng hợp chấm tuyến Zenodo và kiểm độ bền (QĐ-023)
+
+- Zenodo 8 ngày xong 02:42. D nhanh hơn A 11,4% (CI 8,8..14,7), bỏ phạt đường đóng 9,6%; đạt 7/8 ngày, 18/20 khung giờ. Chi tiết và các điểm yếu ở QĐ-023.
+- Mới: `danh_gia/do_ben_cham.py` (đổi hệ số cạnh không đo, đổi mức phạt đường đóng; tách từ CSV, không chạy lại định tuyến). Lần đầu in "điểm hòa" số âm vô nghĩa vì phần không đo của A và D gần bằng nhau, đã sửa thành báo không có điểm hòa.
+- Đang chạy nền từ 02:43: bộ 10 địa danh cùng 8 ngày (`ket_qua/chay_dia_danh.log`). Xong thì chạy `tong_hop_cham.py` và `do_ben_cham.py --bo=dia_danh`.
+- Chưa đẩy GitHub. Vẫn chờ người dùng quyết có thêm nút Bắt đầu với xe ảo vào web không.
+
+## 07/11/2026 (00:45 → 01:21) — web demo cơ bản, chấm lại tuyến trên điểm giao hàng thật (QĐ-022)
+
+- Chạy nền `cham_tuyen_that.py --diem=zenodo` cho 8 ngày, log `danh_gia/ket_qua/chay_zenodo.log`. Tới 01:21 xong 2 ngày, đều ĐẠT: D nhanh hơn A 12,3% (04/11), 12,7% (30/10). Xong hết mới chạy bộ địa danh rồi `tong_hop_cham.py`.
+- Mới: `he_thong/api/dich_vu.py`, `may_chu.py`, `he_thong/web/index.html`, `danh_gia/tong_hop_cham.py`, `mo_hinh/dac_trung.py`, `mo_hinh/ablation.py`; `hoc_sau_hcm.py --them-kenh`. CHƯA chạy trọn: `moc_so_sanh`, `kiem_doan_mo` sau khi tách `BangHoc`, và `ablation` (cần ~6 GB RAM, chờ đánh giá xong).
+- Người dùng báo không thấy bản đồ. Lỗi: (1) `tile.openstreetmap.org` từ chối kết nối ngay từ máy này (curl mã 7); (2) `fitBounds` chạy lúc khung chưa có kích thước nên zoom 5, bấm ra tọa độ ngoài vùng. Lần sửa đầu dùng CARTO, chỉ kiểm ảnh tải được, ảnh chụp mới lộ chữ "API KEY REQUIRED". Lần hai dùng HOT, đã nhìn ảnh thật.
+- Đã thử trên trình duyệt: bấm chuột thật 2 điểm, kéo điểm đến, bấm ngoài vùng, chọn dòng, tuyến khác, lớp kẹt xe (5.708 đoạn), lớp ngập, mưa, triều, đổi chiều, xóa. Không có lỗi console.
+- Phát hiện, chưa sửa: phạt ngập tính theo từng cạnh và là số đặt tay (xem QĐ-022).
+- Người dùng hỏi màn hình dẫn đường (đường kẻ, bấm Bắt đầu, bản đồ quay theo hướng đi). Web demo chưa có, đang chờ quyết định có thêm bản xe ảo vào web không. Chưa đẩy GitHub.
+
 ## 07/11/2026 (00:15 → 00:40) — khai phá M3, M5, M8, M9 và phép thử "có đoán mò không" (QĐ-021)
 
 - Người dùng báo: thầy đã đồng ý đề tài. Người dùng lo "làm xong hóa ra đoán mò" → viết `mo_hinh/kiem_doan_mo.py`.

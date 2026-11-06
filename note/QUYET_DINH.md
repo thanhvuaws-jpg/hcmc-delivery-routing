@@ -396,3 +396,63 @@ Dữ liệu tới 07/11 00:15. Script ở `khai_pha/`, `mo_hinh/kiem_doan_mo.py`
   - Cuối tuần nhẹ hơn hẳn: đỉnh 39% (≥ 200 m), 10% (≥ 1 km) lúc 18h; mới một cuối tuần trọn.
   - ~5–6% tuyến ngắn nhất đi qua đường đang đóng, gần như mọi giờ (đóng dài ngày).
   - Chỉ tính trên phần có số đo; thời gian +147% là trên phần đó.
+
+## QĐ-022 — Web demo: ảnh nền HOT, chỉ chạy ở máy (07/11/2026)
+
+- **Ảnh nền:** HOT (`{s}.tile.openstreetmap.fr/hot`), dữ liệu OpenStreetMap, màu nhạt nên lớp kẹt xe và các tuyến nổi rõ. Đã so tận mắt tại trung tâm TP.HCM với OSM Pháp (quá nhiều chữ), OSM Đức (đường hồng lẫn với màu kẹt), Esri (không phải dữ liệu OSM mà đồ thị đang dùng).
+- **Đã bỏ:** `tile.openstreetmap.org` (máy này không kết nối được, chưa rõ do đâu); CARTO (trả ảnh "API KEY REQUIRED").
+- **Dự phòng:** lỗi từ 3 ảnh trở lên thì tự vẽ đường chính từ `/api/hinh-doan`.
+- **Còn phải làm trước khi mở công khai:** HOT là máy chủ cộng đồng, chưa đọc điều khoản dùng, có thể không hợp lưu lượng lớn. API chưa có mật khẩu, vì vậy chỉ nghe 127.0.0.1 (TomTom gói Evaluation).
+- **Chưa sửa, phạt ngập:** `PHAT_NGAP_S` = 180 s (mưa ≥ 1 mm/h) và 600 s (mưa ≥ 5 mm/h, triều) là số đặt tay, chưa đo, và tính cho MỖI CẠNH nên đường chia càng nhỏ phạt càng nặng: Ung Văn Khiêm 33 cạnh ở 3 mm/h = 99 phút phạt, tuyến tối ưu đi vòng từ 4,2 lên 7,8 phút. Nên đổi sang phạt theo điểm ngập hoặc theo mét. "Dự kiến" cũng chưa tính chậm vì ngập. Số đánh giá tuyến không bị ảnh hưởng vì `cham_tuyen_that.py` chạy không mưa.
+
+## QĐ-023 — Chấm tuyến 8 ngày trên điểm giao hàng thật: đạt, kèm các điểm yếu (07/11/2026)
+
+90 cặp điểm giao hàng thật (Zenodo, hạt 42) × 10 giờ xuất phát × 8 ngày (30/10–06/11) = 7.200 chuyến. Chấm bằng tốc độ TomTom đo sau lúc xuất phát; bộ định tuyến chỉ biết số đo tới lúc đi, CHƯA dùng dự báo. Script `cham_tuyen_that.py`, `tong_hop_cham.py`, `do_ben_cham.py`. Bộ 10 địa danh đang chạy, kết quả ghi sau.
+
+| so sánh | nhanh hơn | CI 95% (theo cặp điểm) | cặp nhanh hơn |
+|---|---|---|---|
+| D tối ưu so với A ngắn nhất | 11,4% (23,2 → 20,5 phút) | 8,8 .. 14,7 | 94% |
+| D, bỏ hẳn phạt đường đóng | 9,6% | 8,2 .. 11,1 | |
+| E tính lại giữa đường so với A | 12,6% | 9,9 .. 15,9 | 94% |
+| D so với B bản đồ thường | 11,1% | 8,6 .. 14,7 | 96% |
+| C nhanh nhất so với B | 13,4% | 10,9 .. 16,9 | 100% |
+| E so với D | 1,3% | 1,1 .. 1,6 | 91% |
+
+- **Tiêu chí kế hoạch** (không chậm hơn ≥ 80%, nhanh hơn ≥ 5%): gộp 84,1%, đạt 7/8 ngày, 18/20 khung giờ.
+- **Không đạt:** Chủ nhật 01/11 (79,2%; E đạt 81,8%, chưa rõ vì sao thấp hơn thứ Bảy 88%, mới có một Chủ nhật); 06:30 ngày thường (70%) và cuối tuần (78%).
+- **06:30:** C đạt 95% ở khung này. D = C + phạt kẹt + phạt rẽ trái, nên phần tụt là giá của các mức phạt đó, không phải số đo sai. Khi chậm, D chậm TB 0,8 phút.
+- **Đánh đổi của D:** dài hơn A 9,6% (7,53 so với 6,87 km), rẽ trái qua trục lớn ít hơn 35% (2,13 so với 3,29). Chậm hơn A ở 15,9% chuyến: trung vi 0,5 phút, p90 1,8 phút.
+- **Độ bền 1, cạnh không đo:** chiếm 30,3% thời gian của A, 30,7% của D, nên đổi hệ số 0,7–2,0 thì số % gần như không đổi (11,3–11,6%). Nhưng tỉ lệ không chậm hơn thì nhạy: 87% ở 0,85; 81% ở 1,15; 77% ở 1,3; 66% ở 2,0. Nghĩa là nếu đường nhỏ thực tế nhanh hơn hồ sơ khoảng 30% thì tiêu chí 80% KHÔNG còn đạt.
+- **Độ bền 2, phạt đường đóng:** phạt 300 s tính cho MỖI CẠNH, là số đặt tay. A dính ở 3,8% chuyến (270 chuyến, chỉ thuộc 4/90 cặp), TB 2,58 cạnh. Hai chuyến D chậm hơn A 50 phút (01/11 19:30) là do 10 cạnh × 5 phút, E tránh được, không phải chậm thật; bỏ các chuyến D dính đường đóng thì chậm nhất 8,6 phút. Báo cáo phải ghi số 9,6% bên cạnh 11,4%.
+- **Giới hạn chưa kiểm được:** TomTom chỉ cho một tốc độ chung mỗi đoạn, không tách riêng xe máy, nên chênh lệch khi kẹt có thể khác với xe máy thật; thời gian chờ đèn và chờ rẽ trái không nằm trong số phút; 8 ngày chỉ có 1 thứ Bảy, 1 Chủ nhật; bootstrap theo cặp điểm chưa tính độ phụ thuộc giữa các ngày. Cách kiểm trực tiếp nhất: chạy thử vài chuyến thật có GPS điện thoại.
+- **Việc tiếp:** đổi phạt đường đóng từ theo cạnh sang theo lần gặp rồi chấm lại ở lần train chính (không sửa `cham_tuyen_that.py` khi bộ địa danh đang chạy: mỗi ngày là một tiến trình mới, sẽ đọc mã mới giữa chừng); chấm lại khi đủ nhiều cuối tuần hơn.
+
+- **Bộ 10 địa danh** (chọn tay, gần trung tâm, 7.056 chuyến; bộ điểm giao hàng thật ở trên mới là số chính):
+  - D so với A 16,6% (CI 14,4 .. 18,8; 19,4 → 16,2 phút), E so với A 17,6% (15,4 .. 19,8), D so với B 15,7% (13,5 .. 18,0), C so với B 18,3% (16,2 .. 20,5), E so với D 1,2% (1,0 .. 1,4). Không chậm hơn 85,4%. Đạt 7/8 ngày, 16/20 khung giờ.
+  - Không đạt: lại đúng Chủ nhật 01/11 (77,4%, E 80,3%); 06:30 ngày thường (68%), cuối tuần 06:30 (76%), 12:00 (79%), 14:00 (76%). Hai bộ điểm cùng cho thấy: Chủ nhật và sáng sớm là chỗ yếu; 06:30 cuối tuần D gần bằng bản đồ thường (−0,1%).
+  - Thiếu 144 chuyến (2%), TẤT CẢ đi tới Lăng Cha Cả, 02–06/11: nút đích bị đường đóng bao quanh ở một số giờ nên không tìm được đường và chuyến bị bỏ khỏi mọi phương án. Vì thế nhóm này tự loại khỏi phép so.
+  - D dính đường đóng 34 chuyến, 30 chuyến trong đó tới Lăng Cha Cả, E cũng không tránh được (đường đóng ngay sát đích). Ba chuyến D chậm 24–29 phút hôm 05/11 14:00 là do 7 cạnh × 5 phút; bỏ các chuyến này thì chậm nhất 8,2 phút.
+  - Cạnh không đo: D 28% thời gian, A 20%, ngược với bộ giao hàng thật (gần bằng nhau). Hệ số 0,7 → 14,1%; 2,0 → 20,2%. Muốn D bằng A thì đường nhỏ phải chậm hơn hồ sơ 6,65 lần. Phạt đường đóng 0 → 16,0%.
+  - 16,6% cao hơn 11,4% nhưng chưa đo vì sao. Có thể do điểm chọn tay gần trung tâm, và hệ số `RUI_RO_KHONG_DO` từng được chỉnh trên bộ địa danh này (30/10). Không báo 16,6% làm số chính.
+
+## QĐ-024 — Web demo có chế độ dẫn đường bằng xe ảo; bản đồ vector MapLibre (07/11/2026, người dùng: "thêm thử đi")
+
+Bổ sung QĐ-018: web vẫn là giao diện cơ bản để test, nay test luôn cả cách dẫn đường trước khi vẽ app. Bản thật có GPS vẫn nằm trong app.
+
+- **Vì sao xe ảo, chưa GPS:** máy tính không di chuyển, GPS thật chỉ có nghĩa trên điện thoại. Xe ảo chạy lại theo số đo TomTom đã thu nên kiểm được chỉ dẫn, quay bản đồ và đổi tuyến giữa đường trên dữ liệu thật. Phần chỉ dẫn và tính lại ở API nên app dùng lại được.
+- **Tách rõ biết và chưa biết:** xe DI CHUYỂN theo tốc độ đo thật ở lúc tới từng cạnh (`giay`). Giờ đến và màu tuyến chỉ dùng `du_kien`, `r_biet` tính từ lần chụp hiện tại, cập nhật mỗi lần chụp mới. Không dùng số đo tương lai cho những gì hiện lên cho người lái. Hết số đo thì xe chạy tiếp bằng số cuối và có ghi rõ trên màn hình.
+- **Đổi tuyến:** cùng luật phương án E (QĐ-013): ở nút đầu tiên sau mốc lần chụp mới, đổi khi đỡ ≥ 60 s chi phí hoặc tuyến cũ qua đường vừa đóng. Đối chiếu với chấm tuyến: z77 01/11 19:30 22,0 phút; z20 05/11 17:00 39,7 phút, 3 lần đổi; khớp hết.
+- **Bản đồ:** MapLibre GL + OpenFreeMap (vector, không cần khóa). Đã bỏ Leaflet vì không quay được; ảnh nền chữ sẽ quay ngược khi đi hướng nam, nên vector mới giữ chữ thẳng. HOT giữ làm dự phòng, sau đó tới đường chính từ `/api/hinh-doan`. Chưa đọc điều khoản OpenFreeMap và HOT, phải đọc trước khi mở công khai. MapLibre có bản Android nên app dùng được cùng cách.
+- **Chỉ dẫn (`chi_dan.py`):** nguyên tắc là chỉ báo khi người lái phải quyết định. Quy tắc ghi ở đầu tệp; ngưỡng 20° / 45° / 150° là chọn tay rồi xem trên tuyến thật, chưa kiểm hàng loạt với thực địa.
+- **Độ phức tạp tuyến** (`do_phuc_tap_tuyen.py`, 85/90 cặp điểm thật; 5 cặp ngoài khung `VUNG` của API dù vẫn nằm trong `trong_vung` theo khoảng cách tới nút):
+
+  | 05/11 | km | phút thực tế | số chỉ dẫn TB | mỗi km | % đi trong hẻm hoặc đường không tên |
+  |---|---|---|---|---|---|
+  | 17:30 ngắn nhất | 6,9 | 30,1 | 17,7 | 2,7 | 13,5 |
+  | 17:30 nhanh nhất | 7,5 | 25,8 | 25,6 | 3,6 | 23,1 |
+  | 17:30 tối ưu | 7,9 | 26,5 | 22,5 | 3,0 | 18,3 |
+  | 10:00 ngắn nhất | 6,9 | 24,0 | 17,7 | 2,7 | 13,5 |
+  | 10:00 tối ưu | 7,6 | 21,5 | 19,7 | 2,8 | 15,2 |
+
+  Giờ cao điểm tối ưu nhiều hơn ngắn nhất 27% chỉ dẫn và ít hơn nhanh nhất 12%, nên chưa cần thêm phạt mỗi lần rẽ. Bốn tuyến chọn tay trước đó cho thấy chênh tới 2–4 lần: không đại diện, đừng trích. Có tuyến riêng lẻ vẫn tới 51 chỉ dẫn; muốn biết người lái có theo nổi không thì phải chạy thử thật.
+- **Chưa làm:** GPS thật, phát hiện lệch tuyến, giọng nói; bắt đầu từ bảng "tuyến khác"; API chưa có mật khẩu nên vẫn chỉ nghe 127.0.0.1.
