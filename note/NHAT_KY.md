@@ -8,7 +8,8 @@ Mục mới nhất ở trên cùng.
 
 - Người dùng chốt: các việc còn dở làm tiếp khi tới lần train chính (~12–13/11).
 - Làm theo thứ tự: chạy kiểm `moc_so_sanh`, `kiem_doan_mo`, `ablation` trước (tắt API nếu thiếu RAM), rồi train chính, rồi nối dự báo vào định tuyến và chấm lại. Sau đó tới phạt đường đóng và ngập, ô nhập địa chỉ, việc tồn. Danh sách đầy đủ ở các mục dưới và QĐ-022, 023, 024.
-- Mã từ 07/11 vẫn chưa đẩy GitHub, đang chờ người dùng bảo.
+- Mã từ 07/11 đã đẩy lên nhánh `web-dan-duong-va-cham-8-ngay`, chưa gộp vào `main`. Máy đang đứng ở nhánh này.
+- Ý cần thử nếu muốn biết sớm: chấm tuyến với "dự báo hoàn hảo" (cho bộ định tuyến biết số đo thật 15–30 phút sau) để ra mức lợi tối đa dự báo có thể đem lại, chưa làm.
 
 ## 07/11/2026 (04:35) — thử nguồn nhận địa chỉ, chưa làm ô nhập
 
