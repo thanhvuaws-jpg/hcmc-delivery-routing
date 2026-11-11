@@ -435,6 +435,40 @@ Dữ liệu tới 07/11 00:15. Script ở `khai_pha/`, `mo_hinh/kiem_doan_mo.py`
   - Cạnh không đo: D 28% thời gian, A 20%, ngược với bộ giao hàng thật (gần bằng nhau). Hệ số 0,7 → 14,1%; 2,0 → 20,2%. Muốn D bằng A thì đường nhỏ phải chậm hơn hồ sơ 6,65 lần. Phạt đường đóng 0 → 16,0%.
   - 16,6% cao hơn 11,4% nhưng chưa đo vì sao. Có thể do điểm chọn tay gần trung tâm, và hệ số `RUI_RO_KHONG_DO` từng được chỉnh trên bộ địa danh này (30/10). Không báo 16,6% làm số chính.
 
+## QĐ-025 — Chạy kiểm trước lần train chính (11/11/2026): mốc 60 phút đã đạt, sự cố và thời tiết chưa giúp
+
+Dữ liệu tới 11/11 17:00 (1.242 khung 15 phút). Học tới 07/11 19:45, kiểm tra từ 07/11 21:00. Đây là lần chạy kiểm mã sau khi tách `BangHoc` và thêm đặc trưng trạng thái chung, CHƯA phải lần train chính.
+
+| MAE (điểm %) | 15 phút | 30 phút | 60 phút |
+|---|---|---|---|
+| giữ nguyên | 6,06 | 7,79 | 9,24 |
+| lịch sử | 7,89 | 7,83 | 7,72 |
+| GBM | 5,65 | 6,68 | 7,24 |
+| **GBM + hồ sơ** | **5,38** | **6,10** | **6,34** |
+| thấp hơn lịch sử | 31,8% | 22,1% | **17,8%** |
+
+- **Tiêu chí ≥ 10% nay đạt cả 3 mốc** (06/11: 60 phút mới 9,3%). Mốc lịch sử gần như cũ (7,72 so với 7,33), còn mô hình giảm từ 6,64 xuống 6,34, nên phần hơn là thật chứ không phải do tập kiểm tra dễ hơn. Tập kiểm tra đã khác 06/11, nên phải so lại ở lần train chính.
+- **Phép thử đoán mò** (lặp lại 07/11):
+  - mô hình 5,39 / 6,13 / 6,36;
+  - nhãn xáo trộn tụt về đúng mức giữ nguyên (6,08 / 7,79 / 9,24);
+  - đúng hướng khi đường đổi mạnh 87,6 / 90,8 / 93,2%, so với đoán TB 73,6–76,8%.
+- **Ablation, câu hỏi 3** (bỏ nhóm thì MAE đổi bao nhiêu; tập sự cố đọc trên `co_du_lieu_su_co`, 55% ô kiểm tra):
+
+  | bỏ nhóm | 15 phút | 30 phút | 60 phút |
+  |---|---|---|---|
+  | hồ sơ | +0,251 | +0,550 | +0,885 |
+  | trạng thái chung (M5) | +0,050 | +0,069 | +0,115 |
+  | sự cố (trên ô có dữ liệu sự cố) | +0,001 | +0,004 | −0,002 |
+  | thời tiết | −0,002 | −0,005 | −0,020 |
+  | lân cận | +0,002 | +0,001 | −0,000 |
+
+  - Hồ sơ đóng góp nhiều nhất. Trạng thái chung toàn mạng có ích thật, đúng như M5 gợi ý.
+  - **Sự cố gần như bằng 0.** Có thể vì 16.216/16.325 sự cố (99,3%) là loại "kẹt xe" do TomTom suy ra từ chính tốc độ, nên trùng thông tin với r.
+  - **Thời tiết hơi làm xấu đi**, vì chưa có trận mưa to nào (ô có mưa dự báo ≥ 1 mm chỉ 2,7%).
+  - Báo cáo phải nói thẳng như vậy. Lần train cuối khi có mưa to và nhiều tuần hơn thì đo lại.
+- Hệ quả: khoảng mất sự cố 09–11/11 gần như không làm giảm độ chính xác dự báo.
+- Graph WaveNet `--ho-so --them-kenh` chạy thử 1 vòng với kênh mới: mã chạy được (11 kênh vào = 5 kênh gốc + 6 kênh thêm, GPU 1,65 GB, 89 s/vòng). Số của 1 vòng không có ý nghĩa, đã xóa tệp kết quả.
+
 ## QĐ-024 — Web demo có chế độ dẫn đường bằng xe ảo; bản đồ vector MapLibre (07/11/2026, người dùng: "thêm thử đi")
 
 Bổ sung QĐ-018: web vẫn là giao diện cơ bản để test, nay test luôn cả cách dẫn đường trước khi vẽ app. Bản thật có GPS vẫn nằm trong app.

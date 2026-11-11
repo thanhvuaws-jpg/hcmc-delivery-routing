@@ -6,6 +6,7 @@ Cùng mô hình GBM + hồ sơ (moc_so_sanh.gbm_ls), cùng mẫu học, cùng t�
 
 Sự cố và mưa chỉ xảy ra ở một phần nhỏ dữ liệu nên MAE toàn bộ gần như không đổi dù chúng có ích đúng lúc cần. Vì
 vậy đo thêm trên đúng các ô liên quan:
+  co_du_lieu_su_co  khung có lần chụp sự cố (đọc đóng góp nhóm sự cố trên tập này, khung thiếu là NaN);
   co_su_co   đoạn đang có sự cố ở khung t;
   co_mua     dự báo mưa giờ kế ≥ 1 mm ở khung t;
   doi_manh   đường thực sự đổi ≥ 15 điểm trong tầm dự báo (lúc khó nhất).
@@ -44,7 +45,10 @@ def main():
         dich_y = (a[y_cot] - a['r']).to_numpy()
         y, r = b[y_cot].to_numpy(), b['r'].to_numpy()
         ngay = b['khung'].dt.strftime('%Y-%m-%d').to_numpy()
+        # co_du_lieu_su_co: khung CÓ lần chụp sự cố (vang.py ghi NaN cho khung thiếu, vd 09/11 23:30 → 11/11 16:45
+        # TomTom từ chối vì hết credit). Đóng góp của nhóm sự cố phải đọc trên tập này, không trên toan_bo.
         tap = {'toan_bo': np.ones(len(y), bool), 'ban_ngay': ((b['khung'].dt.hour >= 6) & (b['khung'].dt.hour < 22)).to_numpy(),
+               'co_du_lieu_su_co': b['su_co'].notna().to_numpy(),
                'co_su_co': (b['su_co'] > 0).to_numpy(), 'co_mua': (b['mua_db_1'] >= 1).to_numpy(), 'doi_manh': np.abs(y - r) >= 0.15}
         print(f'\n{h} phut: {len(y):,} o; ' + ', '.join(f'{k} {v.mean():.1%}' for k, v in tap.items() if k != 'toan_bo'), flush=True)
         kq[h] = {'ty_le_tap': {k: float(v.mean()) for k, v in tap.items()}}

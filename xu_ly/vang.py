@@ -155,6 +155,17 @@ def main():
     kh = kh.groupby(['t', 'doan']).agg(so=('id', 'nunique'), tre=('tre_s', 'max')).reset_index()
     SU_CO[kh['t'], vi_tri[kh['doan']]] = kh['so']
     TRE[kh['t'], vi_tri[kh['doan']]] = kh['tre'].fillna(0)
+    # Khung 15 phút KHÔNG có lần chụp sự cố nào là THIẾU dữ liệu (NaN), không phải "không có sự cố" (0).
+    # Vd 09/11 23:26 → 11/11 16:56 TomTom từ chối vì hết credit (NHAT_KY 11/11).
+    tep_lc = os.path.join(BAC, 'su_co_lan_chup.parquet')
+    if not os.path.exists(tep_lc):
+        raise SystemExit('Thieu du_lieu/bac/su_co_lan_chup.parquet: chay xu_ly/bac_su_co.py truoc')
+    t_lc = ((pd.read_parquet(tep_lc, columns=['khung'])['khung'] - ngay0) // pd.Timedelta('15min')).to_numpy()
+    co_lc = np.zeros(T, dtype=bool)
+    co_lc[t_lc[(t_lc >= 0) & (t_lc < T)]] = True
+    SU_CO[~co_lc] = np.nan
+    TRE[~co_lc] = np.nan
+    print(f'Su co: {int((~co_lc).sum())}/{T} khung 15 phut khong co lan chup nao -> NaN')
 
     # ── Tĩnh theo đoạn ──
     tinh['doan'] = doan_cua

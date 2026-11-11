@@ -133,7 +133,10 @@ def main():
     if dung_them:
         H = Hp[VAO - 1:VAO - 1 + T]
         chung = np.nan_to_num(chung_toan_mang(R, H) / ls)
-        kenh_them = [(them['su_co'] > 0).astype(np.float32), np.log1p(np.nan_to_num(them['tre_su_co_s'])) / 8,
+        # Sự cố NaN = khung không có lần chụp (xu_ly/vang.py): ghi 0 vào hai kênh sự cố và thêm kênh "có dữ liệu
+        # sự cố" để mạng phân biệt "không có sự cố" với "không biết".
+        kenh_them = [(np.nan_to_num(them['su_co']) > 0).astype(np.float32), np.log1p(np.nan_to_num(them['tre_su_co_s'])) / 8,
+                     (~np.isnan(them['su_co'])).astype(np.float32),
                      np.nan_to_num(them['ty_le_dong']), np.clip(np.nan_to_num(them['mua_db_1']), 0, 10) / 10,
                      np.broadcast_to(chung[:, None], R.shape)]
         Tv = torch.tensor(np.stack([np.concatenate([np.zeros((VAO - 1, N), np.float32), k.astype(np.float32),
@@ -168,7 +171,7 @@ def main():
     mau_hoc, mau_kd = hoc_tat[:-so_kd], hoc_tat[-so_kd:]
     mau_kt = np.arange(dau_kiem, T)
 
-    so_kenh = (5 if dung_ho_so else 4) + (len(COT_THEM) + 1 if dung_them else 0)
+    so_kenh = (5 if dung_ho_so else 4) + (Tv.shape[0] if Tv is not None else 0)
     if ten_mh == 'gru':
         mh = GRUNut(vao=so_kenh, ra=RA)
     else:

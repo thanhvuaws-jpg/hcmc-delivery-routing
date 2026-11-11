@@ -69,6 +69,7 @@
 ## TomTom
 
 - Key ở `thuctaptotnghiep/.env` (`TOMTOM_KEY=`). Không bao giờ in key ra màn hình hay nhật ký. Khi in lỗi HTTP phải che `key=`.
+- 09/11/2026 23:26: `incidentDetails` trả 403 `InsufficientFunds` ("not enough credits"), không hồi qua ngày. Ô tốc độ, ô sự cố, Search vẫn 200. Lỗi 403 phải đọc phần thân trả về mới biết lý do; log Lambda chỉ ghi "403 Forbidden".
 - Hạn mức Evaluation: 2.500 lượt gọi thường/ngày (Flow Segment, Incidents…) + 50.000 ô bản đồ/ngày. Một lần chụp khu trung tâm = 30 ô → 5 phút/lần = 8.640 ô/ngày.
 - traffic_level ở kiểu `relative` = tốc độ hiện tại / tốc độ đường trống. Thang chia: <0,4 kẹt; 0,4–0,75 đông; ≥0,75 thông.
 - Incidents API không nhận `language=vi-VN` (400): dùng en-GB. Tên đường (from/to) vẫn là tiếng Việt.

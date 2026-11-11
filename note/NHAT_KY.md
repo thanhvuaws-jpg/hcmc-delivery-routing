@@ -4,6 +4,42 @@ Mục mới nhất ở trên cùng.
 
 > 30/10/2026 11:53: các mục trong ngày từng ghi giờ ước chừng (13:00, 14:30…) — SAI, đồng hồ thật khi đó chưa tới 12:00. Đã sửa: chỉ ghi giờ có bằng chứng (giờ tệp, lệnh `date`, giờ trên AWS).
 
+## 11/11/2026 (17:22 → 18:15) — chạy kiểm 3 script trước lần train chính (QĐ-025)
+
+- pytest 66/66. `moc_so_sanh` 28 phút, `kiem_doan_mo` 3,2 phút, `ablation` 18,5 phút, Graph WaveNet thử 1 vòng 1,9 phút: không lỗi.
+- GBM + hồ sơ 5,38 / 6,10 / 6,34, thấp hơn lịch sử 31,8 / 22,1 / 17,8% → mốc 60 phút nay đạt 10%.
+- Ablation: hồ sơ và trạng thái chung có ích; sự cố ≈ 0; thời tiết hơi âm. Chi tiết ở QĐ-025.
+- Đã xóa tệp kết quả 1 vòng của Graph WaveNet (`hcm_gwn_ho_so_them_2026-11-11.*`) để khỏi nhầm với kết quả thật.
+- Chưa đẩy GitHub (thay đổi từ 11/11 nằm trên nhánh `web-dan-duong-va-cham-8-ngay`, chưa commit).
+
+## 11/11/2026 (16:46 → 17:3x) — đổi key TomTom, đánh dấu khoảng mất sự cố là thiếu
+
+- Người dùng nâng cấp tài khoản TomTom, tạo key mới, dán vào `.env` rồi vào Lambda (người dùng tự dán). Lượt 17:01 lấy được 242 sự cố, không lỗi.
+- **Khoảng mất sự cố: lượt 09/11 23:26 → 11/11 16:56** (~41,5 giờ, ~500 lượt). Không lấy lại được: TomTom chỉ trả sự cố đang diễn ra.
+- Người dùng chốt giữ gọi sự cố 5 phút/lần. Nếu 2.500 lượt là tổng cộng thì hết khoảng sáng 20/11, nên nâng thêm ngày 18/11. Chưa biết 2.500 là theo ngày hay tổng cộng.
+- Sửa:
+  - `xu_ly/bac_su_co.py` ghi thêm `bac/su_co_lan_chup.parquet` (mọi lần chụp, kể cả lần trống).
+  - `xu_ly/vang.py` ghi NaN cho khung 15 phút không có lần chụp sự cố nào.
+  - `hoc_sau_hcm.py --them-kenh` thêm kênh "có dữ liệu sự cố"; số kênh tính theo `Tv`.
+  - `ablation.py` thêm tập `co_du_lieu_su_co`.
+- Kéo S3 + dựng lại bạc, vàng tới 11/11 17:00: 266/266 mục kiểm ĐẠT. Ô tốc độ 288/288 mỗi ngày, 0 khung thiếu.
+- Kiểm tầng vàng: đúng 166 khung NaN, từ 09/11 23:30 tới 11/11 16:45. Khung 23:15 ngày 09/11 và 17:00 ngày 11/11 có số; không khung nào NaN một phần.
+- Đề xuất (chưa làm): cảnh báo email trên AWS (CloudWatch metric filter "HTTP Error" → Alarm → SNS) để lỗi không kéo dài nữa. Người dùng bấm, Claude hướng dẫn.
+
+## 11/11/2026 (12:14 → 16:46) — sự cố TomTom bị chặn vì hết credit
+
+- Người dùng hỏi bị giới hạn phần sự cố, muốn xoay vòng nhiều tài khoản TomTom. Đã kiểm, CHƯA sửa gì.
+- Log Lambda: từ lượt 09/11 23:26, phần sự cố (`incidentDetails` v5) bị trả 403 `InsufficientFunds`: "You do not have enough credits to perform this action". Lỗi lặp lại mọi lượt, tới 11/11 12:11 vẫn lỗi.
+  - Không phải hạn mức ngày, vì qua nửa đêm không hồi.
+  - Trên S3 mất 7 tệp sự cố của 09/11, cả ngày 10/11 và 11/11.
+- Phần còn lại vẫn đủ: ô tốc độ 288/288 lượt mỗi ngày tới 10/11 (11/11 có 147 tệp tới 12:11), thời tiết 24/24. Đường đóng không mất vì lấy từ ô tốc độ.
+- Gọi thử một lần mỗi loại bằng khóa trong `.env`:
+  - `incidentDetails`: 403.
+  - `flowSegmentData`, Search, ô tốc độ, ô sự cố (`/traffic/map/4/tile/incidents`): đều 200.
+- Ô sự cố có loại, mô tả, độ trễ (giây), mức nghiêm trọng, loại đường, hình học. Không có mã riêng cho từng sự cố (trường `id` giống nhau ở mọi sự cố đã xem), tên đường từ/đến, giờ bắt đầu.
+- Không làm xoay vòng nhiều tài khoản để lách hạn mức. Đề xuất chuyển sang ô sự cố, dùng cùng khóa và hạn mức ô.
+- **Phải sửa trước khi train:** `xu_ly/vang.py` khởi tạo `SU_CO`, `TRE` bằng 0. Khung không có lần chụp sự cố sẽ bị hiểu là "không có sự cố", làm sai đặc trưng sự cố và kết quả ablation. Phải đánh dấu là thiếu.
+
 ## 07/11/2026 — tạm dừng, chờ lần train chính
 
 - Người dùng chốt: các việc còn dở làm tiếp khi tới lần train chính (~12–13/11).
@@ -15,12 +51,12 @@ Mục mới nhất ở trên cùng.
 
 - Người dùng hỏi nhập tên đường, số nhà được không. Thử 17 câu địa chỉ công khai, mốc đúng sai số ~100 m, tự chọn nên chỉ để định hướng. Script chỉ ở thư mục tạm, chưa vào dự án. TomTom tốn 17/2.500 lượt.
 
-  | kết quả | Photon (OSM) | TomTom Search |
-  |---|---|---|
-  | lệch ≤ 200 m | 10 | 10 |
-  | lệch 200 m – 1 km | 1 | 2 |
-  | sai ≥ 1 km mà vẫn trả kết quả | 2 | 4 |
-  | không tìm thấy | 4 | 1 |
+  | kết quả                       | Photon (OSM) | TomTom Search |
+  | ----------------------------- | ------------ | ------------- |
+  | lệch ≤ 200 m                  | 10           | 10            |
+  | lệch 200 m – 1 km             | 1            | 2             |
+  | sai ≥ 1 km mà vẫn trả kết quả | 2            | 4             |
+  | không tìm thấy                | 4            | 1             |
 
 - Nominatim: máy này không kết nối được. Goong, Google chưa thử vì cần tài khoản và khóa.
 - Không nguồn nào nhận "243/73 Hoàng Diệu". Đồ thị có 19.943 tên, 17.653 tên hẻm, nên tự tìm hẻm trong dữ liệu của mình được (ra vị trí hẻm, không ra đúng số nhà).
@@ -103,7 +139,7 @@ Mục mới nhất ở trên cùng.
 ## 30–31/10/2026 (22:56 → 00:05) — tuần 7 xong phần còn lại: phạt rẽ trái, tuyến thay thế (QĐ-016)
 
 - `tim_duong.py`:
-  - trạng thái A* = (nút, nút vừa rời);
+  - trạng thái A\* = (nút, nút vừa rời);
   - `la_re_trai_lon`, `dem_re_trai_lon`, `phat_re_trai_s`, `so_re_trai_lon` trong kết quả;
   - nhớ ước lượng h theo nút.
   - Chi phí 270/270 tuyến trùng khít trước/sau.
@@ -217,7 +253,6 @@ Mục mới nhất ở trên cùng.
   - Claude KHÔNG tự bấm thử (sẽ dừng bộ thu thật). Đã chụp: nút hiện đúng (Bắt đầu mờ vì tác vụ đang bật).
   - Tab AWS không có nút: profile chỉ-đọc, muốn dừng AWS thì vào EventBridge Scheduler (CAN_NHO).
 
-
 ## 30/10/2026 (xong lúc 11:53) — tốc độ thật cho định tuyến
 
 - `xu_ly/toc_do_canh.py` → `bac/toc_do_canh.parquet`, `bac/toc_do_ho_so.parquet`.
@@ -238,7 +273,6 @@ Mục mới nhất ở trên cùng.
   - trọng số thời gian theo giờ: cạnh có TomTom → hồ sơ cạnh khi đủ ngày; không có → hồ sơ loại × giờ;
   - cạnh đang đóng (tầng bạc `phu_dong`) → cấm.
 
-
 ## 30/10/2026 (trước 11:53) — kiểm thử tự động, sửa 2 lỗi dữ liệu
 
 - Git: repo dùng danh tính riêng `thanhvuaws-jpg` + email noreply GitHub (`git config` cục bộ). Commit đầu viết lại tác giả → d244204, push `--force-with-lease`.
@@ -252,7 +286,6 @@ Mục mới nhất ở trên cùng.
   - Vàng 30/10: 346.388 dòng (lấy lại phần mở của cạnh đóng một phần).
 - Kết quả M1/M2 ở `khai_pha/ket_qua/` tạo TRƯỚC 2 lần sửa (số đoạn đổi rất ít). Chạy lại khi cần dùng số liệu.
 
-
 ## 30/10/2026 (trước 11:53) — lên GitHub công khai
 
 - Repo: https://github.com/thanhvuaws-jpg/hcmc-delivery-routing (Public). Commit đầu ed60298: 52 tệp mã + ghi chú.
@@ -262,8 +295,7 @@ Mục mới nhất ở trên cùng.
   - gitignore kết quả vẽ từ TomTom (`khai_pha/ket_qua/`, `mo_hinh/ket_qua/`, `tuan3_ket_xe.png`) và `dist/`.
 - Kiểm sau khi đẩy: `.env` và `du_lieu/` không có trên GitHub (404).
 
-
-## 30/10/2026 (sau 11:24) — M2 điểm nóng Getis-Ord Gi*
+## 30/10/2026 (sau 11:24) — M2 điểm nóng Getis-Ord Gi\*
 
 - `khai_pha/m2_diem_nong.py` → `khai_pha/ket_qua/m2_2026-10-30_0730-0900.csv/.png`.
   - x = 1 − r TB (tầng vàng, đã bỏ đường đóng); lân cận 400 m nhị phân gồm chính nó; Benjamini–Hochberg FDR 5%.
@@ -283,7 +315,6 @@ Mục mới nhất ở trên cùng.
   5. Tắt bộ thu ở máy (GO_HEN_GIO.bat) khi người dùng đồng ý: đã có số so sánh hai nguồn (QĐ-009).
   6. M2 lặp cho cao điểm chiều và nhiều ngày; đối chiếu với 186 điểm ùn tắc của Công an nếu tìm được danh sách.
 
-
 ## 30/10/2026 (sau 11:24) — M1 mô tả + phát hiện đường đóng ghi 0
 
 - `khai_pha/m1_mo_ta.py` (ngày 30/10, cao điểm 07:30–09:00) → `khai_pha/ket_qua/m1_2026-10-30_*`:
@@ -295,8 +326,7 @@ Mục mới nhất ở trên cùng.
 - Phát hiện: đường ĐÓNG TomTom ghi mức 0 (xem CAN_NHO). Đã sửa `vang.py` (r chỉ phần mở + `ty_le_dong`) và M1.
   - Vàng sau sửa: 29/10 151.831 dòng, 30/10 317.195 dòng.
 
-
-## 30/10/2026 (tới 11:24, giờ tệp moc_*_1124.json) — đoạn đường, tầng vàng, mốc so sánh đầu tiên
+## 30/10/2026 (tới 11:24, giờ tệp moc\_\*\_1124.json) — đoạn đường, tầng vàng, mốc so sánh đầu tiên
 
 - `xu_ly/canh_tinh.py` → `bac/canh_tinh.parquet`: 350.839 cạnh × 32 cột, 575 s, phần lớn là độ trung gian 300 nguồn.
   - Cạnh trung gian cao nhất: Công trường Dân Chủ, Hoàng Văn Thụ.
@@ -318,7 +348,6 @@ Mục mới nhất ở trên cùng.
     - **KHÔNG trích số này vào báo cáo.** Chạy lại khi có ≥ 7–14 ngày.
   - scikit-learn HistGradientBoosting; máy chưa có lightgbm/xgboost (pip từng bị chặn — nếu cần thì người dùng tự cài).
 - `thu_thap/KEO_S3.bat` giờ chạy: sync → bac_tomtom → bac_su_co → bac_thoi_tiet → vang.
-
 
 ## 30/10/2026 (sau 10:45) — tầng bạc thời tiết, điểm giao hàng, điểm ngập, đặc trưng tĩnh
 
@@ -343,7 +372,6 @@ Mục mới nhất ở trên cùng.
   - 186 điểm nguy cơ ùn tắc (Công an TP.HCM, 30/10/2025): danh sách đầy đủ không có trong bài.
   - 34 "rốn ngập" Sở Xây dựng (25/06/2026): đa số ngoài vùng, PC08 mới hơn.
 
-
 ## 30/10/2026 (IAM tạo 10:34, kéo S3 ~10:40) — khóa chỉ-đọc S3, kéo dữ liệu AWS, đo nhiễu hai nguồn
 
 - IAM:
@@ -360,10 +388,10 @@ Mục mới nhất ở trên cùng.
   - đêm: 97–99%, ~30 km/h.
 - Người dùng tự xóa user cũ `user_thanhvu` (Admin, khóa chưa từng dùng). Claude kiểm lại: "Users deleted", IAM còn 1 user `thuctap-doc-s3`, profile vẫn chạy. Root đã có MFA.
 
-
 ## 30/10/2026 (01:00–04:20) — tăng tốc ghép, tầng bạc, thêm nguồn
 
 **Đã xong (có số kiểm):**
+
 - `dinh_tuyen/ghep_tomtom.py` viết lại bằng numpy: 19 s → 0,7 s/lần chụp; song song 6 tiến trình ~0,15 s/lần chụp.
   - Kết quả trùng bản cũ: `kiem_tra_ghep_nhanh.py` ĐẠT trên 3 lần chụp (0 cạnh lệch).
   - Chỉ mục mới ghi atomic, có `ma_do_thi`. Bộ thu ở máy dùng bản mới từ lượt 01:02, không lỗi.
@@ -395,6 +423,7 @@ Mục mới nhất ở trên cùng.
   - thêm `python tai_osm.py poi` (trường, chợ, bệnh viện, TTTM, trạm buýt).
 
 **05:01–05:05 — xong phần bản đồ mới (QĐ-006):**
+
 - OSM vùng ô TomTom tải xong: 16/16 ô, 59 phút vì Overpass quá tải. 204.684 nút, 58.414 đường, 1.123 luật cấm rẽ → `osm_vung_tomtom.json` (28,5 MB).
 - Đồ thị mới: 170.259 nút, 350.839 cạnh, 8.937 km (cũ: 122.543 / 252.455 / 5.968 km); 94 luật cấm + 11 luật "chỉ được". `ma_do_thi` = be3e6a760eb6.
   - `kiem_tra_tuan1.py`: 90/90 tuyến, 0 lỗi luật, TB 71 ms/tuyến.
@@ -407,6 +436,7 @@ Mục mới nhất ở trên cùng.
 - POI (D16): `osm_poi_vung_tomtom.json`, 4.608 điểm (2.099 trạm buýt, 686 trường, 136 chợ, 112 bệnh viện, 121 ĐH/CĐ, 44 TTTM…).
 
 **Còn dở:** (kéo S3 đã xong lúc 10:40, xem mục trên)
+
 - Đặt lại sàn Hampel bằng nhiễu hai nguồn khi đã kéo được S3 (QĐ-008).
 
 ## 30/10/2026 — soát tiền AWS, xóa bản sao lưu RDS cũ
@@ -542,7 +572,7 @@ Thao tác bằng Claude in Chrome, tài khoản đang đăng nhập bằng root.
 - `dinh_tuyen/do_thi.py`: đồ thị xe máy từ OSM, dựng trong 4 giây.
   - 122.543 nút, 252.455 cạnh có hướng, 36.707 đường. 97% số nút nằm trong thành phần liên thông mạnh lớn nhất.
   - Áp luật: một chiều, cấm xe máy, bỏ cao tốc, 83 luật cấm rẽ + 6 luật "chỉ được đi". 794 luật cấm rẽ ghi "trừ xe máy" → không áp. 50 luật cấm theo giờ lưu riêng để tuần 7 áp. 45 luật có "via" là cả con đường thì chưa xử lý.
-- `dinh_tuyen/tim_duong.py`: A* với trạng thái (nút, đường đang đi) để áp luật cấm rẽ; không quay đầu giữa đường.
+- `dinh_tuyen/tim_duong.py`: A\* với trạng thái (nút, đường đang đi) để áp luật cấm rẽ; không quay đầu giữa đường.
 - `dinh_tuyen/kiem_tra_tuan1.py` trên 10 địa điểm × 90 cặp:
   - Tìm được 90/90 cặp, **0 lỗi luật**.
   - Trung bình 79 ms/tuyến, chậm nhất 271 ms.

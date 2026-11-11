@@ -16,6 +16,8 @@ Mỗi khung 5 phút giữ một lần chụp, ưu tiên AWS (như bac_tomtom.py)
       id, ten_loai, tu, den, mo_ta, lan_dau, lan_cuoi, so_khung, tre_s_max, dai_m_max,
       muc_tre_max, bat_dau, ket_thuc (giờ VN, từ TomTom), canh (list chỉ số cạnh),
       canh_m (mét trùng trên từng cạnh), ty_le_ghep, hinh_hoc (lần dài nhất, [lon, lat])
+  du_lieu/bac/su_co_lan_chup.parquet
+      khung, nguon — mọi lần chụp sự cố đã có, kể cả lần trống (để biết khung nào THIẾU dữ liệu)
 
 Ghép sự cố vào cạnh: dùng chính BoGhep của dữ liệu kẹt xe, theo ĐÚNG chiều hình học
 (sự cố kẹt xe vẽ theo chiều xe chạy; đường đóng hai chiều thì TomTom ghi hai sự cố).
@@ -68,6 +70,13 @@ def main():
                        ('aws', os.path.join(SU_CO_AWS, '*', '*.json.gz'))):
         for tep in glob.glob(mau):
             khung.setdefault(khung_cua(tep), {})[nguon] = tep
+
+    # Danh sách lần chụp ĐÃ CÓ, kể cả lần không có sự cố nào: tầng vàng cần biết khung nào thiếu hẳn lần chụp
+    # để ghi NaN thay vì 0 (09/11 23:26 → 11/11 16:56 TomTom từ chối vì hết credit, NHAT_KY 11/11).
+    os.makedirs(BAC, exist_ok=True)
+    pd.DataFrame({'khung': pd.to_datetime(sorted(khung)),
+                  'nguon': ['aws' if 'aws' in khung[k] else 'may' for k in sorted(khung)]}
+                 ).to_parquet(os.path.join(BAC, 'su_co_lan_chup.parquet'), index=False)
 
     phan = []
     for k in sorted(khung):
