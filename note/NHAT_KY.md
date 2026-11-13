@@ -4,6 +4,42 @@ Mục mới nhất ở trên cùng.
 
 > 30/10/2026 11:53: các mục trong ngày từng ghi giờ ước chừng (13:00, 14:30…) — SAI, đồng hồ thật khi đó chưa tới 12:00. Đã sửa: chỉ ghi giờ có bằng chứng (giờ tệp, lệnh `date`, giờ trên AWS).
 
+## 13/11/2026 (03:54 → 05:2x) — đọc kết quả lần train chính (QĐ-026), thử che kênh sự cố
+
+- 9 bước chạy 22:54 → 03:54, không lỗi. Thời gian:
+  - `moc_so_sanh` 26 phút, `kiem_doan_mo` 3 phút, `ablation` 18 phút;
+  - Graph WaveNet: + hồ sơ + thêm kênh 60 phút, + hồ sơ 57 phút, thường 83 phút;
+  - GRU: + hồ sơ 14 phút, thường 36 phút;
+  - `may_chu.py --dung-ho-so` 1 phút.
+- GBM + hồ sơ 5,48 / 6,16 / 6,29, thấp hơn lịch sử 29,5 / 20,6 / 18,8%. Học sâu + hồ sơ cũng đạt ≥ 10% nhưng chưa thắng GBM. Chi tiết ở QĐ-026.
+- Người dùng lo "đang khá là tệ hả". Đã trả lời bằng số: phần chính tốt hơn lần 1; chỗ yếu là học sâu chưa vượt GBM, mức trung bình, không ảnh hưởng hệ thống.
+- Phát hiện: Graph WaveNet thêm kênh kém đi chỉ ở 10–11/11, đúng những ngày mất dữ liệu sự cố. Thêm cờ `--che-su-co` vào `hoc_sau_hcm.py`: khi học, che 3 kênh sự cố ở 20% mẫu; mặc định tắt nên lượt cũ tái lập được.
+- 03:56 chạy `gwn --ho-so --them-kenh --che-su-co`, log `mo_hinh/ket_qua/chay_che_su_co_2026-11-13.log`.
+- 05:17 xong (81 phút, dừng sớm vòng 50): 5,79 / 6,25 / 6,30. Hai ngày mất sự cố từ 7,26 / 7,06 về 6,14 / 6,14 (60 phút) → cách che sửa được. Học sâu tốt nhất cả 3 mốc; 60 phút kém GBM + hồ sơ chỉ 0,1%. Kết quả hơi lạc quan vì cách sửa nghĩ ra sau khi nhìn tập kiểm tra, đã ghi giới hạn ở QĐ-026.
+- Tệp: `mo_hinh/ket_qua/hoc_sau/hcm_gwn_ho_so_them_che_2026-11-12.{json,pt}`.
+- Chưa commit (`hoc_sau_hcm.py` + 4 tệp note).
+
+## 12/11/2026 (22:41 → 22:54) — kiểm toàn bộ rồi bắt đầu lần train chính
+
+- Người dùng: "bắt đầu train dc chưa m chêck kĩ toàn bộ trc nha".
+- S3: 11/11 đủ 288 lượt ô tốc độ; 12/11 có 273/273 lượt ô tốc độ và 273/273 lượt sự cố (tới 22:41), thời tiết 23/23 giờ.
+- Log Lambda từ 11/11 17:00: 357 lượt, không lỗi.
+  - Muốn đọc log bằng Git Bash phải đặt `MSYS_NO_PATHCONV=1`, nếu không `/aws/lambda/...` bị đổi thành đường dẫn Windows và báo AccessDenied giả.
+  - Lọc "403" khớp nhầm dòng REPORT có thời gian chạy 7403 ms.
+- Kéo S3 và dựng lại bạc, vàng tới 12/11 22:30: 15 ngày, 7.486 đoạn. 284/284 mục kiểm ĐẠT, pytest 66/66.
+- Sự cố NaN có 246/1440 khung, gồm 3 khoảng:
+  - 29/10 trước 19:00 (75 khung, bộ thu chưa chạy);
+  - khoảng mất 09/11 23:30 → 11/11 16:45 (166 khung);
+  - 12/11 22:45 → 23:45 (5 khung, chưa tới).
+  Không có khoảng mất mới.
+- Máy: GPU trống, RAM trống 4,7 GB, ổ C trống 31 GB. Cắm sạc, chế độ ngủ "không bao giờ" (xin giữ máy thức bị từ chối, không cần vì máy không ngủ).
+- Chia 70% của 1.360 khung (29/10 18:45 → 12/11 22:30): học tới 08/11 16:15, kiểm tra từ 08/11 17:30. Cuối tuần trong tập kiểm tra chỉ có tối Chủ nhật 08/11, vì dữ liệu kết thúc vào thứ Năm. Không đổi cách chia (QĐ-018).
+- 22:54 bắt đầu train, chạy lần lượt:
+  1. `moc_so_sanh`, `kiem_doan_mo`, `ablation`;
+  2. Graph WaveNet `--ho-so --them-kenh`, GRU `--ho-so`, Graph WaveNet `--ho-so`, Graph WaveNet, GRU;
+  3. `may_chu.py --dung-ho-so`.
+  Log ở `mo_hinh/ket_qua/chay_train_chinh_2026-11-12.log`.
+
 ## 11/11/2026 (17:22 → 18:15) — chạy kiểm 3 script trước lần train chính (QĐ-025)
 
 - pytest 66/66. `moc_so_sanh` 28 phút, `kiem_doan_mo` 3,2 phút, `ablation` 18,5 phút, Graph WaveNet thử 1 vòng 1,9 phút: không lỗi.

@@ -490,3 +490,80 @@ Bổ sung QĐ-018: web vẫn là giao diện cơ bản để test, nay test luô
 
   Giờ cao điểm tối ưu nhiều hơn ngắn nhất 27% chỉ dẫn và ít hơn nhanh nhất 12%, nên chưa cần thêm phạt mỗi lần rẽ. Bốn tuyến chọn tay trước đó cho thấy chênh tới 2–4 lần: không đại diện, đừng trích. Có tuyến riêng lẻ vẫn tới 51 chỉ dẫn; muốn biết người lái có theo nổi không thì phải chạy thử thật.
 - **Chưa làm:** GPS thật, phát hiện lệch tuyến, giọng nói; bắt đầu từ bảng "tuyến khác"; API chưa có mật khẩu nên vẫn chỉ nghe 127.0.0.1.
+
+## QĐ-026 — Kết quả lần train chính (12–13/11/2026): GBM + hồ sơ tốt nhất; học sâu + hồ sơ đạt tiêu chí, bắt kẹt 30–60 phút tốt hơn; kênh sự cố hỏng khi mất dữ liệu, che lúc học thì sửa được
+
+Dữ liệu 29/10 18:45 → 12/11 22:30 (1.360 khung, 7.485 đoạn). Học tới 08/11 16:15 (học sâu: 855 mẫu học, 96 kiểm định, 405 kiểm tra). Kiểm tra 08/11 17:30 → 12/11 22:30, tức tối Chủ nhật 08/11 cộng thứ Hai tới thứ Năm. Lần đầu có đặc trưng "tuần trước"; mốc lịch sử tra đúng thứ ở 100% dòng (06/11 chỉ 45%). Log: `mo_hinh/ket_qua/chay_train_chinh_2026-11-12.log`.
+
+| MAE (điểm %) | 15 phút | 30 phút | 60 phút | thấp hơn lịch sử |
+|---|---|---|---|---|
+| giữ nguyên | 6,28 | 8,11 | 9,65 | |
+| TB 1 giờ | 7,11 | 8,20 | 9,75 | |
+| lịch sử | 7,77 | 7,76 | 7,76 | |
+| GRU | 6,01 | 7,28 | 8,38 | 22,7 / 6,2 / −8,0% |
+| Graph WaveNet | 5,93 | 7,13 | 8,16 | 23,7 / 8,1 / −5,2% |
+| GBM | 5,75 | 6,79 | 7,36 | 26,0 / 12,5 / 5,2% |
+| Graph WaveNet + hồ sơ + thêm kênh | 6,17 | 6,72 | 6,80 | 20,6 / 13,4 / 12,4% |
+| Graph WaveNet + hồ sơ + thêm kênh + che sự cố (chạy 13/11) | 5,79 | 6,25 | 6,30 | 25,4 / 19,5 / 18,7% |
+| Graph WaveNet + hồ sơ | 5,83 | 6,31 | 6,39 | 25,0 / 18,7 / 17,7% |
+| GRU + hồ sơ | 5,79 | 6,36 | 6,34 | 25,5 / 18,0 / 18,3% |
+| **GBM + hồ sơ** | **5,48** | **6,16** | **6,29** | **29,5 / 20,6 / 18,8%** |
+
+| F1 mức kẹt | 15 phút | 30 phút | 60 phút |
+|---|---|---|---|
+| giữ nguyên | 0,625 | 0,529 | 0,460 |
+| GBM + hồ sơ | 0,641 | 0,591 | 0,573 |
+| GRU + hồ sơ | **0,644** | **0,617** | 0,601 |
+| Graph WaveNet + hồ sơ | 0,638 | 0,608 | **0,604** |
+| Graph WaveNet + hồ sơ + thêm kênh + che sự cố | 0,637 | 0,605 | 0,601 |
+
+- **Tiêu chí ≥ 10% đạt cả 3 mốc** với GBM + hồ sơ, GRU + hồ sơ và Graph WaveNet + hồ sơ (thấp nhất 17,7%). So với 06/11, MAE của GBM + hồ sơ giảm 4,2 / 4,8 / 5,3% và Graph WaveNet + hồ sơ giảm 6,6 / 5,8 / 5,1%. Tập kiểm tra đã khác nên chỉ so tương đối.
+- **GBM + hồ sơ có MAE và RMSE thấp nhất** (RMSE 8,63 / 9,59 / 9,77; học sâu + hồ sơ 9,25–10,16). Học sâu + hồ sơ kém GBM 5,7–6,4% ở 15 phút, 0,8–3,2% ở 30 và 60 phút.
+- **Nhưng học sâu + hồ sơ bắt mức kẹt 30–60 phút tốt hơn**: F1 kẹt 0,601–0,617 so với 0,573–0,591 của GBM. Chưa kiểm ý nghĩa thống kê (cần bootstrap theo ngày, giờ), nên chưa được báo là "hơn".
+- **Thông tin không gian giúp rất ít.** Graph WaveNet so với GRU: không hồ sơ thấp hơn 1,3 / 2,1 / 2,6%; có hồ sơ −0,7 / +0,8 / −0,8%, coi như bằng nhau. Trên METR-LA là 10 / 15 / 22%. Cùng chiều với ablation GBM (lân cận ≈ 0) và M5 (tương quan giữa các đoạn xa chủ yếu là biến động chung). Giả thuyết chưa kiểm: khung 15 phút quá thô, ảnh hưởng của đường lân cận lan tới trong chưa tới 15 phút nên đã nằm sẵn trong r(t); thêm vào đó đồ thị thưa và đã bỏ ma trận tự học.
+- **Học sâu đạt tốt nhất rất sớm**: vòng 7 (GRU + hồ sơ), 15 (Graph WaveNet + hồ sơ), 17 (thêm kênh); không hồ sơ thì vòng 31–54. Giả thuyết: 855 mẫu học là quá ít. Sẽ kiểm bằng đường cong học (học với 50 / 70 / 100% số ngày).
+- **Thêm kênh làm Graph WaveNet kém đi 5,8 / 6,5 / 6,4%, và phần kém dồn hết vào ngày mất sự cố** (MAE 60 phút):
+
+  | | 08/11 tối CN | 09/11 | 10/11 (mất cả ngày) | 11/11 (mất tới 16:45) | 12/11 |
+  |---|---|---|---|---|---|
+  | Graph WaveNet + hồ sơ | 8,73 | 6,26 | 6,17 | 6,14 | 6,36 |
+  | + thêm kênh | 7,73 | 6,21 | **7,26** | **7,06** | 6,40 |
+  | + thêm kênh + che sự cố | 7,70 | 6,20 | **6,14** | **6,14** | 6,36 |
+  | (GBM + hồ sơ để so) | 7,29 | 6,21 | 6,15 | 6,15 | 6,41 |
+
+  - Nguyên nhân: khoảng mất 09/11 23:30 → 11/11 16:45 nằm trọn trong phần kiểm tra. Lúc học, kênh "có dữ liệu sự cố" luôn bằng 1, nên mạng chưa từng gặp cảnh thiếu dữ liệu và đoán lệch khi gặp.
+  - Ngày có dữ liệu thì hai bản ngang nhau; tối Chủ nhật bản thêm kênh còn tốt hơn 11%.
+  - GBM không bị ảnh hưởng (ablation sự cố ≈ 0 cả trên ô có dữ liệu sự cố).
+  - Sửa: cờ `--che-su-co` trong `hoc_sau_hcm.py` (khi học, che kênh sự cố ở 20% mẫu như lúc mất thật). **Hệ thống thật cũng cần cách này**, vì TomTom có thể lỗi lại.
+  - **Kết quả che (13/11 03:56 → 05:17, 81 phút, tốt nhất ở vòng 30, dừng sớm vòng 50):** 5,79 / 6,25 / 6,30.
+    - Hai ngày mất sự cố về 6,14 / 6,14 (60 phút), bằng bản không thêm kênh. Ngày có dữ liệu giữ nguyên. Tối Chủ nhật vẫn giữ lợi thế của thêm kênh (7,70 so với 8,73).
+    - Là mô hình học sâu tốt nhất cả 3 mốc. So với GBM + hồ sơ: kém 5,7% ở 15 phút, 1,4% ở 30 phút, **0,1% ở 60 phút (coi như hòa)**. Ở 60 phút thắng GBM 4 ngày thường, thua tối Chủ nhật (7,70 so với 7,29).
+    - F1 kẹt 0,637 / 0,605 / 0,601, vẫn trên GBM ở 30–60 phút.
+    - **Giới hạn phải ghi trong báo cáo:** cách sửa này nghĩ ra SAU khi nhìn MAE theo ngày của tập kiểm tra, nên số trên tập kiểm tra hơi lạc quan. Bù lại, tỷ lệ 20% chọn trước, không dò; cơ chế giải thích được và phần cải thiện nằm đúng chỗ dự đoán (ngày mất). Mới chạy 1 hạt giống ngẫu nhiên; chênh 0,1% với GBM nằm trong nhiễu. Lần train cuối (2–3 tháng) phải bật `--che-su-co` ngay từ đầu, khi đó mới là kiểm tra sạch.
+- **Phép thử đoán mò: đạt.**
+  - Mô hình 5,47 / 6,16 / 6,30.
+  - Nhãn xáo trộn tụt về đúng mức giữ nguyên (6,29 / 8,11 / 9,64).
+  - Đúng hướng khi đường đổi mạnh 87,9 / 91,5 / 93,7%, so với đoán theo trung bình 72,6–76,0%.
+- **Ablation GBM + hồ sơ** (bỏ nhóm thì MAE đổi bao nhiêu, 15 / 30 / 60 phút):
+
+  | bỏ nhóm | 15 phút | 30 phút | 60 phút | ghi chú |
+  |---|---|---|---|---|
+  | hồ sơ | +0,274 | +0,645 | +1,091 | lớn hơn 11/11 (+0,25 / +0,55 / +0,885) |
+  | trạng thái chung | +0,012 | +0,019 | +0,015 | nhỏ hơn 11/11 (+0,05 / +0,07 / +0,115); trên ô đổi mạnh bỏ đi lại tốt hơn 0,17–0,21 |
+  | sự cố | −0,002 | +0,002 | 0,000 | trên ô có sự cố +0,029 ở 15 phút |
+  | thời tiết | +0,003 | +0,003 | 0,000 | trên ô có mưa bỏ đi lại tốt hơn 0,007–0,021 |
+  | lân cận | +0,001 | −0,002 | +0,001 | |
+
+  - Ngoài hồ sơ, các nhóm còn lại gần như không giúp với dữ liệu hiện có.
+  - Trạng thái chung từng có ích ở lần chạy kiểm 11/11 nay nhỏ lại. Một lần chia dữ liệu chưa đủ để kết luận nó có ích.
+- **Điểm yếu là tối Chủ nhật 08/11.**
+  - GBM + hồ sơ 6,55 / 7,34 / 7,29, so với ngày thường 5,33–5,53 / 6,01–6,23 / 6,15–6,41.
+  - Học sâu + hồ sơ còn kém bản không hồ sơ (Graph WaveNet 60 phút: 8,73 so với 7,73). Hồ sơ cuối tuần buổi tối mới có 3 tối (31/10, 01/11, 07/11).
+  - Tập kiểm tra chỉ có một tối cuối tuần, nên chưa đo được cuối tuần cho ra hồn.
+- **Đề xuất, chờ người dùng duyệt:** nối GBM + hồ sơ vào định tuyến trước, vì MAE thấp nhất ở 15–30 phút, chạy CPU và không hỏng khi mất sự cố. Mô hình học sâu đem so khi chấm tuyến là Graph WaveNet + hồ sơ + thêm kênh + che sự cố (thay cho bản không che).
+- **Việc tiếp:**
+  1. ~~đọc kết quả `--che-su-co`~~ (xong, xem trên);
+  2. đường cong học;
+  3. bootstrap F1 kẹt giữa học sâu và GBM;
+  4. thử trung bình dự báo GBM + Graph WaveNet che sự cố (hai mô hình sai ở chỗ khác nhau: GBM tốt tối Chủ nhật, Graph WaveNet tốt ngày thường ở 60 phút);
+  5. nối dự báo vào định tuyến rồi chấm lại.

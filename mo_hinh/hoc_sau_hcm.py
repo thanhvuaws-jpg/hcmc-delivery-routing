@@ -15,9 +15,10 @@ Dữ liệu còn ít ngày thì số chỉ để KIỂM ĐƯỜNG ỐNG, chưa k
 
 Mỗi vòng lưu điểm dừng: máy tắt / ngủ giữa chừng thì chạy lại với --tiep (cùng dữ liệu).
 
-Chạy:  python hoc_sau_hcm.py [gwn|gru] [--ho-so] [--them-kenh] [--so-vong=200] [--tiep]
+Chạy:  python hoc_sau_hcm.py [gwn|gru] [--ho-so] [--them-kenh] [--che-su-co] [--so-vong=200] [--tiep]
        --ho-so: học phần chênh so với hồ sơ lịch sử của đoạn ở giờ đích (ho_so_lich_su.py, QĐ-020).
        --them-kenh (cần --ho-so): thêm sự cố, phần đường đóng, mưa dự báo, tình trạng chung — để so công bằng với GBM.
+       --che-su-co (cần --them-kenh): lúc học che kênh sự cố ở 20% mẫu như khi TomTom mất dữ liệu (QĐ-026).
 Ra:    mo_hinh/ket_qua/hoc_sau/hcm_<mô hình>_<ngày cuối của dữ liệu>.json + .pt — giữ lại từng lần train để
        so độ ổn định qua các tuần (tính từ dữ liệu TomTom — không lên git)
 """
@@ -47,6 +48,7 @@ BUOC = {'15': 0, '30': 1, '60': 3}              # chỉ số khung ra (0 = 15 ph
 LO = 4                                          # N lớn: lô nhỏ cho vừa GPU 4 GB
 KIEN_NHAN = 20
 TY_LE_KIEM_DINH = 0.1
+TY_LE_CHE = 0.2                 # --che-su-co: phần mẫu học bị che kênh sự cố (QĐ-026)
 
 
 def nap_vang(cot_them=()):
@@ -98,6 +100,9 @@ def main():
     dung_them = '--them-kenh' in sys.argv
     if dung_them and not dung_ho_so:
         sys.exit('--them-kenh can --ho-so')
+    ty_le_che = TY_LE_CHE if '--che-su-co' in sys.argv else 0.0
+    if ty_le_che and not dung_them:
+        sys.exit('--che-su-co can --them-kenh')
     khung, doan, R, them = nap_vang(COT_THEM if dung_them else ())
     T, N = R.shape
     A, so_canh = do_thi(doan)
@@ -142,8 +147,9 @@ def main():
         Tv = torch.tensor(np.stack([np.concatenate([np.zeros((VAO - 1, N), np.float32), k.astype(np.float32),
                                                     np.zeros((RA, N), np.float32)]) for k in kenh_them]), device=tb_)
 
-    def lo(mau):
-        """Mẫu (khung t) -> vào (B, số kênh, N, VAO); ra (B, RA, N) theo r (NaN = thiếu); mức nền cộng vào đầu ra."""
+    def lo(mau, che=False):
+        """Mẫu (khung t) -> vào (B, số kênh, N, VAO); ra (B, RA, N) theo r (NaN = thiếu); mức nền cộng vào đầu ra.
+        che=True (chỉ lúc học, cần --che-su-co): che kênh sự cố của một số mẫu như lúc mất dữ liệu thật."""
         s = torch.as_tensor(mau, device=tb_)[:, None] + buoc
         x, y = V[s[:, :VAO]], V[s[:, VAO:]]
         m = ~torch.isnan(x)
@@ -155,7 +161,21 @@ def main():
             kenh.append(torch.nan_to_num((x - Hv[s[:, :VAO]]) / ls, nan=0.0))
             nen = torch.nan_to_num(Hv[s[:, VAO:]], nan=tb)
         if dung_them:
+            i_su_co = len(kenh)
             kenh.extend(Tv[j][s[:, :VAO]] for j in range(Tv.shape[0]))
+            if che and ty_le_che > 0:
+                # Lần mất 09–11/11 nằm trọn trong phần kiểm tra: lúc học mạng chưa từng thấy "không có dữ liệu sự cố"
+                # nên đoán lệch (QĐ-026). Che 3 kênh đầu của Tv (có sự cố, độ trễ, có dữ liệu) = đúng cách vang.py
+                # ghi khung mất: số 0 và "có dữ liệu" = 0. Đoạn che liền nhau trong cửa sổ vào; nửa số lần che cả cửa sổ.
+                B = len(mau)
+                giu = np.ones((B, VAO), np.float32)
+                for b in np.flatnonzero(rng.random(B) < ty_le_che):
+                    a = 0 if rng.random() < 0.5 else int(rng.integers(0, VAO))
+                    e = VAO if a == 0 else int(rng.integers(a + 1, VAO + 1))
+                    giu[b, a:e] = 0
+                giu_t = torch.as_tensor(giu, device=tb_)[:, :, None]
+                for j in range(3):
+                    kenh[i_su_co + j] = kenh[i_su_co + j] * giu_t
         return torch.stack(kenh, dim=1).transpose(2, 3), y, nen
 
     def mae_co_nhan(du, y):
@@ -181,6 +201,8 @@ def main():
         ten_mh += '_ho_so'
     if dung_them:
         ten_mh += '_them'
+    if ty_le_che:
+        ten_mh += '_che'
     mh = mh.to(tb_)
     toi_uu = torch.optim.Adam(mh.parameters(), lr=1e-3, weight_decay=1e-4)
     print(f'{ten_mh}: {sum(p.numel() for p in mh.parameters()):,} tham so; mau hoc/kiem dinh/kiem tra '
@@ -210,7 +232,7 @@ def main():
         mat = []
         tron = rng.permutation(mau_hoc)
         for k in range(0, len(tron), LO):
-            x, y, nen = lo(tron[k:k + LO])
+            x, y, nen = lo(tron[k:k + LO], che=True)
             loss = mae_co_nhan(mh(x) * ls + nen, y)
             toi_uu.zero_grad()
             loss.backward()
