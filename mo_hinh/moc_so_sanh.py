@@ -5,6 +5,8 @@ So 5 cách, cùng một tập kiểm tra chia THEO THỜI GIAN (KE_HOACH_DU_LIEU
   giu_nguyen   y(t+h) = r(t)                         — mốc ngây thơ, mô hình nào cũng phải thắng
   tb_1h        y(t+h) = TB r của 1 giờ gần nhất
   lich_su      y(t+h) = TB r theo (đoạn, thứ, ô 15 phút) trên phần học — lớp LichSu, mốc của tiêu chí ≥ 10%
+  ho_so        y(t+h) = hồ sơ ngày thường / cuối tuần của đoạn ở giờ đích (ho_so_lich_su.py, chỉ phần học) — mốc MẠNH
+               hơn khi mới có ít tuần (mỗi thứ chỉ 1–2 ngày). Báo cả hai mốc (QĐ-028).
   gbm          HistGradientBoosting (scikit-learn) học PHẦN THAY ĐỔI y − r từ mọi đặc trưng tầng vàng
   gbm_ls       gbm + hồ sơ lịch sử ở giờ đích và tình trạng chung toàn mạng (dac_trung.py, QĐ-020, QĐ-021)
 Chia: 70% khung thời gian đầu để học, chừa KHOẢNG_HO khung, phần sau để kiểm tra (nhãn 60 phút
@@ -119,22 +121,30 @@ def main():
         gio = b['khung'].dt.hour.to_numpy()
         yt, r = b[y].to_numpy(), b['r'].to_numpy()
         ls, dung_thu = lich_su.du_bao(b, int(h))
+        vt = b.index.to_numpy()
+        dich = np.minimum(bang.fi[vt] + int(h) // 15, len(khung) - 1)
+        hs = bang.H[dich, bang.ni[vt]]
+        hs = np.where(np.isnan(hs), r, hs)                    # đoạn chưa có hồ sơ ở ô đó: giữ nguyên
         ngay = b['khung'].dt.strftime('%Y-%m-%d').to_numpy()
         kq['ket_qua'][h] = {
             'giu_nguyen': danh_gia(yt, r, r, gio),
             'tb_1h': danh_gia(yt, b['r_tb_1h'].fillna(b['r']).to_numpy(), r, gio),
             'lich_su': danh_gia(yt, ls, r, gio),
+            'ho_so': danh_gia(yt, hs, r, gio),
             'gbm': danh_gia(yt, du, r, gio),
             'gbm_ls': danh_gia(yt, du_ls, r, gio),
             'lich_su_dung_thu': round(dung_thu, 4),
             'mae_theo_ngay': {'giu_nguyen': mae_theo_ngay(yt, r, ngay), 'lich_su': mae_theo_ngay(yt, ls, ngay),
+                              'ho_so': mae_theo_ngay(yt, hs, ngay),
                               'gbm': mae_theo_ngay(yt, du, ngay), 'gbm_ls': mae_theo_ngay(yt, du_ls, ngay)}}
         g = kq['ket_qua'][h]
         print(f'{h:>2} phut | MAE giu nguyen {g["giu_nguyen"]["mae"]:.2f} | TB 1h {g["tb_1h"]["mae"]:.2f} | '
               f'lich su {g["lich_su"]["mae"]:.2f} (dung thu {dung_thu:.0%}) | GBM {g["gbm"]["mae"]:.2f} | '
               f'GBM+ho so {g["gbm_ls"]["mae"]:.2f} '
-              f'(thap hon lich su {100 * (1 - g["gbm_ls"]["mae"] / g["lich_su"]["mae"]):.1f}%)', flush=True)
-        for k in ('lich_su', 'gbm', 'gbm_ls'):
+              f'(thap hon lich su {100 * (1 - g["gbm_ls"]["mae"] / g["lich_su"]["mae"]):.1f}%, '
+              f'thap hon ho so NT/CT {g["ho_so"]["mae"]:.2f} {100 * (1 - g["gbm_ls"]["mae"] / g["ho_so"]["mae"]):.1f}%)',
+              flush=True)
+        for k in ('lich_su', 'ho_so', 'gbm', 'gbm_ls'):
             x = g[k]
             print(f'        {k:<8} RMSE {x["rmse"]:.2f} | ban ngay {x["mae_ban_ngay"]:.2f} | dang dong/ket '
                   f'{x["mae_dang_dong_ket"]:.2f} | dung 3 muc {x["dung_3_muc"]:.1%} | F1 3 muc {x["f1_3_muc"]:.3f} | '

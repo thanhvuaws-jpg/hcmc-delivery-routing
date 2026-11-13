@@ -136,6 +136,8 @@
   - Khung vàng t = ĐẦU khung (t, t+5, t+10). Lúc đi 06:30 thì GBM chỉ có khung 06:15, còn lần chụp 06:30 đã thuộc khung SAU. Vì vậy 15 phút đầu "giữ nguyên lần chụp" thắng mọi dự báo.
   - Đừng cộng phần thay đổi dự báo vào lần chụp 5 phút của một cạnh: lần chụp đó rất nhiễu. Dùng thẳng mức dự báo của đoạn.
   - Trước khi chấm tuyến, đo độ đúng ở mức cạnh (`danh_gia/kiem_du_bao_canh.py`), trên ngày KHÔNG đem chấm.
+- **Mốc "lịch sử theo TỪNG THỨ" yếu khi mới có 1–2 tuần** (13/11, QĐ-028): MAE 7,76 so với 6,52 của hồ sơ ngày thường / cuối tuần. So với mốc yếu thì GBM "thấp hơn 19%", nhưng so với mốc mạnh chỉ 3,5% ở 60 phút. Mỗi lần báo số dự báo phải kèm CẢ HAI mốc. Mốc theo thứ sẽ mạnh lên khi có nhiều tuần, nên tiêu chí 60 phút có thể không còn đạt.
+- **Dự báo đoạn đem xuống cạnh đều đoán lạc quan** (nhanh hơn thật 7–10%). Bộ định tuyến lại chọn đúng cạnh bị đoán nhanh, nên giờ đến hứa sớm 1,2–1,5 phút. Muốn so cách nào đoán giờ đến tốt hơn thì xem cả LỆCH (dấu), không chỉ sai TB.
 - Muốn dừng tiến trình bằng psutil theo chuỗi trong dòng lệnh: phải loại PID của chính mình, và loại shell đang chạy lệnh đó, vì dòng lệnh của chúng cũng chứa chuỗi tìm. Không loại thì tự giết mình (exit 15, 13/11).
 - `distances_bay_2017.csv` KHÔNG có dòng tiêu đề, `distances_la_2012.csv` có — đọc kiểu `header=None` rồi bỏ dòng "from" nếu có.
 - Google Drive (thư mục chia sẻ của tác giả bài báo): `gdown.download_folder(id=..., skip_download=True)` để xem mã tệp, rồi `gdown.download(id=...)`.

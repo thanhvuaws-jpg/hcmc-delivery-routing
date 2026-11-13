@@ -4,6 +4,20 @@ Mục mới nhất ở trên cùng.
 
 > 30/10/2026 11:53: các mục trong ngày từng ghi giờ ước chừng (13:00, 14:30…) — SAI, đồng hồ thật khi đó chưa tới 12:00. Đã sửa: chỉ ghi giờ có bằng chứng (giờ tệp, lệnh `date`, giờ trên AWS).
 
+## 13/11/2026 (13:0x → 14:5x) — lập tuyến trước 30 phút, lớp dự báo trên web, mốc hồ sơ (QĐ-028)
+
+- Người dùng lo "vậy là dự án failer r hả", rồi "làm hết đi t lo quá". Đã trả lời bằng bảng 4 chỉ số thành công (đều đạt). Đẩy git trước: commit 3fec901 lên nhánh `train-chinh-12-11` và `main`.
+- Người dùng hỏi có phải do thiếu dữ liệu, và các bộ dữ liệu dùng làm gì. Đã trả lời bằng bảng D1–D16. Bằng chứng không phải thiếu ngày: đường cong học phẳng, trần biết trước chỉ 2,3%. D11 Kaggle chưa dùng.
+- `danh_gia/cham_tuyen_dat_truoc.py` + `tong_hop_dat_truoc.py`: lập lúc p cho chuyến đi lúc p + 30.
+  - Chạy 4 ngày 13:13 → 14:13; tự kiểm N = D 900/900 × 4.
+  - Dự báo thắng giữ nguyên (thời gian 1,6–1,8%, giờ đến sai ít hơn 25%) nhưng NGANG hồ sơ lịch sử.
+- Tìm ra mốc "lịch sử theo thứ" yếu (MAE 7,76) so với hồ sơ ngày thường / cuối tuần (6,52): GBM chỉ hơn hồ sơ 16,7 / 6,0 / 3,5%.
+  - Rủi ro cho tiêu chí 60 phút ở lần train cuối.
+  - `moc_so_sanh.py` thêm mốc `ho_so`; chạy lại 14:21 → 14:46 khớp đúng số. Ngày thường ở 60 phút GBM NGANG hồ sơ; lợi thế chủ yếu ở 15–30 phút.
+- `kiem_du_bao_canh_ls.py`: ở mức cạnh, ls ≈ GBM ≈ Graph WaveNet; mọi cách đều đoán lạc quan 7–10%.
+- API `GET /api/du-bao` + web "Kẹt xe theo: bây giờ / dự báo 15 / 30 / 60 phút tới". Kiểm trên trình duyệt: đúng khung, ngoài khoảng báo lỗi rõ, không lỗi máy chủ.
+- Bỏ "E + dự báo" (lý do ở QĐ-028).
+
 ## 13/11/2026 (05:2x → 11:0x) — gộp mô hình, bootstrap, nối dự báo vào định tuyến, đường cong học (QĐ-027)
 
 - Người dùng: "ok làm đi" (duyệt đề xuất cuối QĐ-026). Đẩy git trước: nhánh `train-chinh-12-11`, commit 920f35f, `main` tiến nhanh tới đó.

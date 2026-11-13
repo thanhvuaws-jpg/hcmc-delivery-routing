@@ -27,6 +27,10 @@ from mo_hinh_toc_do import MoHinhTocDo, R_SAN  # noqa: E402
 BAC = os.path.join(GOC, 'du_lieu', 'bac')
 SILVER = os.path.join(BAC, 'tomtom_canh')
 TEP_HO_SO = os.path.join(BAC, 'ho_so_api.npz')
+# Dự báo GBM + hồ sơ NGOÀI MẪU (phần kiểm tra của mô hình, mo_hinh/so_sanh_du_bao.py; QĐ-027, QĐ-028). Tính từ dữ liệu
+# TomTom nên không lên git; chưa có tệp thì API báo lỗi rõ ràng, các phần khác vẫn chạy.
+MAU_DU_BAO = os.path.join(GOC, 'mo_hinh', 'ket_qua', 'du_bao_gbm_ls_*.parquet')
+TAM_DU_BAO = (15, 30, 45, 60)
 VUNG = (10.721, 106.607, 10.838, 106.748)       # nam, tây, bắc, đông — vùng 30 ô TomTom (thu_thap/tai_osm.py)
 V_SAN_KMH = 3.0
 PHAT_DONG_S = 300.0                             # như danh_gia/cham_tuyen_that.py
@@ -65,6 +69,7 @@ class DichVu:
         self.n = len(self.d.dai)
         self.lan_chup_dang_biet = None
         self._hinh_doan = None
+        self._du_bao = None
         self._doan_cua = pd.read_parquet(os.path.join(BAC, 'canh_doan.parquet'))['doan'].to_numpy()
         self.cac_ngay = sorted(os.path.basename(t)[:10] for t in glob.glob(os.path.join(SILVER, '*.parquet')))
 
@@ -78,7 +83,7 @@ class DichVu:
 
     def thong_tin(self):
         return {'ngay': self.cac_ngay, 'moi_nhat': str(self.khung_moi_nhat), 'vung': VUNG,
-                'so_canh': self.n, 'so_nut': self.d.bd.G.number_of_nodes()}
+                'so_canh': self.n, 'so_nut': self.d.bd.G.number_of_nodes(), 'khoang_du_bao': self.khoang_du_bao()}
 
     def lan_chup_gan(self, luc=None):
         """Lần chụp mới nhất ≤ luc (mặc định: mới nhất có dữ liệu)."""
@@ -327,6 +332,50 @@ class DichVu:
         g = g[g.index.isin(list(hinh))]
         r = np.where(g['w'] > 0, g['rw'] / g['w'].where(g['w'] > 0), -1).round().astype(int)
         return {'lan_chup': str(kh), 'doan': g.index.astype(int).tolist(), 'r': r.tolist()}
+
+    def _nap_du_bao(self):
+        if self._du_bao is None:
+            tep = sorted(glob.glob(MAU_DU_BAO))
+            if not tep:
+                raise LoiYeuCau('Chua co du bao (chay mo_hinh/so_sanh_du_bao.py).')
+            d = pd.read_parquet(tep[-1], columns=['khung', 'doan', 'du_15', 'du_30', 'du_60'])
+            d['du_45'] = (d['du_30'] + d['du_60']) / 2          # GBM không có tầm 45: lấy giữa 30 và 60
+            self._du_bao = d.set_index('khung').sort_index()
+        return self._du_bao
+
+    @staticmethod
+    def khung_vua_xong(kh):
+        """Khung 15 phút (đầu khung f, gồm lần chụp f, f+5, f+10) mới nhất đã ĐỦ lúc kh: f + 10 phút ≤ kh."""
+        return (pd.Timestamp(kh) - pd.Timedelta(minutes=10)).floor('15min')
+
+    def du_bao(self, luc=None, tam=30):
+        """
+        r dự báo (điểm %) từng đoạn chính cho khung bắt đầu f + tam, f = khung vừa xong lúc lần chụp gần luc — chỉ dùng
+        dữ liệu có tới lúc đó. Chỉ có ở khoảng ngoài mẫu của mô hình (phần kiểm tra); ngoài khoảng đó báo lỗi rõ ràng.
+        Kèm r cùng đoạn ở khung vừa xong để giao diện so "bây giờ" với "sắp tới".
+        """
+        if tam not in TAM_DU_BAO:
+            raise LoiYeuCau(f'Tam du bao phai la mot trong {TAM_DU_BAO} phut.')
+        with self.khoa:
+            kh = self.lan_chup_gan(luc)
+        db = self._nap_du_bao()
+        f = self.khung_vua_xong(kh)
+        if f not in db.index:
+            raise LoiYeuCau(f'Chua co du bao luc {kh:%d/%m %H:%M}. Du bao ngoai mau chi co tu khung '
+                            f'{db.index.min():%d/%m %H:%M} toi {db.index.max():%d/%m %H:%M}.')
+        x = db.loc[[f]]
+        x = x[x['doan'].isin(set(self.hinh_doan()))]
+        return {'lan_chup': str(kh), 'khung_goc': str(f), 'khung_dich': str(f + pd.Timedelta(minutes=tam)),
+                'tam_phut': tam, 'mo_hinh': 'GBM + ho so', 'doan': x['doan'].astype(int).tolist(),
+                'r': (x[f'du_{tam}'] * 100).round().astype(int).tolist()}
+
+    def khoang_du_bao(self):
+        """Khoảng thời gian có dự báo ngoài mẫu (None nếu chưa có tệp)."""
+        try:
+            db = self._nap_du_bao()
+        except LoiYeuCau:
+            return None
+        return [str(db.index.min()), str(db.index.max())]
 
     def ngap(self, trieu_cuong=True):
         """Các đoạn dễ ngập đã ghép được vào đồ thị (D8): đường gấp khúc theo từng điểm ngập."""

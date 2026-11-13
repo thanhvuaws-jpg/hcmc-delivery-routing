@@ -107,7 +107,12 @@
       <span class="cham" style="background:#e34948"></span>kẹt
       <span class="cham" style="background:#1c1c1a"></span>đóng</span></div>
     <div class="dong"><label><input id="lop-ngap" type="checkbox"> Điểm dễ ngập</label></div>
-    <div class="dong"><label><input type="checkbox" disabled> Dự báo 15/30/60 phút</label> <span class="chu-nho">gắn sau lần train chính</span></div>
+    <div class="dong"><label>Kẹt xe theo <select id="lop-du-bao">
+      <option value="">bây giờ (đo được)</option>
+      <option value="15">dự báo 15 phút tới</option>
+      <option value="30">dự báo 30 phút tới</option>
+      <option value="60">dự báo 60 phút tới</option></select></label></div>
+    <p class="chu-nho" id="du-bao-ghi"></p>
     <p class="chu-nho" id="ghi-chu"></p>
   </div>
   <div id="ban-do">
@@ -366,11 +371,20 @@ async function veKet() {
   try {
     trangThai('Đang tải lớp kẹt xe…');
     if (!hinhDoan) hinhDoan = await goi('/api/hinh-doan');
-    const tt = await goi('/api/tinh-trang?luc=' + encodeURIComponent(thoiDiem()));
+    const tam = $('lop-du-bao').value;
+    const tt = await goi((tam ? '/api/du-bao?tam=' + tam + '&luc=' : '/api/tinh-trang?luc=') + encodeURIComponent(thoiDiem()));
     const f = [];
     tt.doan.forEach((d, i) => { const h = hinhDoan[d]; if (h) f.push(duong(h, { mau: mauR(tt.r[i]) })); });
     map.getSource('ket').setData(tapHop(f));
-    trangThai('Kẹt xe lúc ' + tt.lan_chup.slice(5, 16) + ' · ' + tt.doan.length + ' đoạn');
+    if (tam) {
+      const gioDich = new Date(tt.khung_dich.replace(' ', 'T'));
+      const het = new Date(gioDich.getTime() + 15 * 60000);
+      const hm = d => String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+      trangThai('Dự báo kẹt xe ' + hm(gioDich) + '–' + hm(het) + ' (tính lúc ' + tt.lan_chup.slice(11, 16) +
+                ', từ khung ' + tt.khung_goc.slice(11, 16) + ') · ' + tt.doan.length + ' đoạn');
+    } else {
+      trangThai('Kẹt xe lúc ' + tt.lan_chup.slice(5, 16) + ' · ' + tt.doan.length + ' đoạn');
+    }
   } catch (e) { trangThai(e.message, true); }
 }
 
@@ -690,6 +704,7 @@ $('bat-dau').onclick = batDauDanDuong;
 $('dd-ket').onclick = ketThucDanDuong;
 $('dd-dung').onclick = () => { dd.dung = !dd.dung; $('dd-dung').textContent = dd.dung ? 'Chạy tiếp' : 'Tạm dừng'; };
 $('lop-ket').onchange = veKet;
+$('lop-du-bao').onchange = () => { if ($('lop-du-bao').value) $('lop-ket').checked = true; veKet(); };
 $('lop-ngap').onchange = veNgap;
 ['ngay', 'gio'].forEach(id => { $(id).onchange = () => { tinhTuyen(); veKet(); }; });
 ['mua', 'trieu'].forEach(id => { $(id).onchange = tinhTuyen; });
@@ -703,6 +718,10 @@ function datMoiNhat() {
 (async function khoiDong() {
   const tt = await goi('/api/thong-tin');
   window.moiNhat = tt.moi_nhat;
+  $('du-bao-ghi').textContent = tt.khoang_du_bao
+    ? 'Dự báo GBM + hồ sơ, chỉ có ở khoảng mô hình chưa học (' + tt.khoang_du_bao[0].slice(5, 16) + ' → ' +
+      tt.khoang_du_bao[1].slice(5, 16) + '). Chỉ dùng dữ liệu có tới lúc tính.'
+    : 'Chưa có tệp dự báo trên máy này.';
   tt.ngay.forEach(n => { const op = document.createElement('option'); op.value = n; op.textContent = n; $('ngay').append(op); });
   datMoiNhat();
   await taoBanDo();

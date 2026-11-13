@@ -692,3 +692,110 @@ Người dùng duyệt đề xuất cuối QĐ-026 và việc tiếp. Cùng tậ
   2. E + dự báo (tính lại giữa đường có dùng dự báo);
   3. đưa dự báo vào API / web (giờ đến dự kiến theo dự báo, cảnh báo kẹt 30–60 phút tới);
   4. phạt đường đóng theo lần gặp (việc cũ từ QĐ-023).
+- **Người dùng (13/11): "làm hết đi"** → QĐ-028.
+
+## QĐ-028 — Chấm tuyến lập trước 30 phút; lớp dự báo trên API / web (13/11/2026, người dùng: "làm hết đi")
+
+### 1. Chấm tuyến lập trước 30 phút
+
+- Vì sao: QĐ-027 cho thấy với chuyến đi ngay, dự báo không giúp. Chỗ "giữ nguyên" yếu nhất là 30–60 phút tới (MAE 8,1–9,6 so với GBM 6,2–6,3), tức chuyến lên tuyến trước lúc đi: đơn hẹn giao, điều phối xếp chuyến.
+- Mã `danh_gia/cham_tuyen_dat_truoc.py`:
+  - Lập lúc p cho chuyến xuất phát lúc τ = p + 30 phút; chỉ biết dữ liệu tới p.
+  - So 5 cách biết r theo khe kể từ τ:
+    - `giu`: lần chụp lúc p;
+    - `ls`: hồ sơ của đoạn theo (ngày thường / cuối tuần, ô 15 phút), CHỈ từ phần học;
+    - `gbm_ls`, `gwn_ho_so_them_che`: dự báo tầm 45 và 60 phút cho 2 khe đầu, quá tầm thì như `ls`;
+    - `that`: biết trước, làm trần.
+  - Mỗi cách tính tuyến nhanh nhất (n_) và tối ưu (t_). Mốc: A (ngắn nhất), N (tối ưu lập ngay lúc đi).
+  - Ghi cả giờ đến DỰ KIẾN lúc lập.
+  - Tổng hợp `tong_hop_dat_truoc.py`, có CI theo cặp điểm.
+- Tự kiểm: N trùng phut_D của lần chấm đi ngay 90/90, chạy thử 09/11 17:00.
+- Chạy 4 ngày 09–12/11 (13:13 →), 2 ngày song song. Log `danh_gia/ket_qua/chay_dat_truoc30_{a,b}.log`.
+- **Kết quả 4 ngày** (13:13 → 14:13, 3.600 chuyến; tự kiểm N = D 900/900 cả 4 ngày). Tổng hợp `danh_gia/ket_qua/tong_hop_dat_truoc30.json`, CI 95% theo cặp điểm.
+  - Thời gian thật của tuyến tối ưu, nhanh hơn `giu`:
+
+    | cách biết | nhanh hơn | CI 95% |
+    |---|---|---|
+    | ls (hồ sơ) | 1,79% | 1,22 .. 2,33 |
+    | gbm_ls | 1,60% | 1,05 .. 2,10 |
+    | gwn_ho_so_them_che | 1,75% | 1,21 .. 2,27 |
+    | that (trần) | 5,64% | 5,15 .. 6,13 |
+    | N (lập ngay lúc đi) | 3,53% | 3,17 .. 3,88 |
+
+    So với `ls`: gbm −0,20% (CI −0,38 .. −0,02, tức hơi KÉM), gwn −0,04% (CI −0,13 .. +0,07, ngang).
+  - Sai giờ đến dự kiến lúc lập, tuyến nhanh nhất:
+
+    | cách biết | sai TB | lệch TB (âm = hứa sớm) | p90 |
+    |---|---|---|---|
+    | giu | 1,93 phút (8,3%) | −1,49 | 4,58 |
+    | ls | 1,38 phút (5,9%) | −1,19 | 3,34 |
+    | gbm_ls | 1,45 (6,2%) | −1,28 | 3,52 |
+    | gwn | 1,43 (6,1%) | −1,28 | 3,34 |
+    | that | 0,46 (2,1%) | −0,09 | 0,98 |
+
+    gbm − ls: +0,07 phút (CI +0,03 .. +0,11); gwn − ls: +0,05 (CI +0,04 .. +0,06). Cả hai hơi kém hồ sơ.
+- **Kết luận:**
+  - Lập trước 30 phút thì dự báo (cả GBM lẫn học sâu) thắng "giữ nguyên" rõ ràng: thời gian 1,6–1,8%, giờ đến sai ít hơn 25% (0,48–0,50 phút).
+  - Nhưng **không hơn hồ sơ lịch sử ngày thường / cuối tuần**. Hồ sơ đã lấy gần hết phần lợi; trần còn 3,9% chưa ai lấy được.
+- **Vì sao dự báo chỉ ngang hồ sơ** (kiểm để GIẢI THÍCH, `kiem_du_bao_canh_ls.py` và tính lại trên ô):
+  - Ở mức ô, mốc "lịch sử" của tiêu chí (theo TỪNG THỨ, `LichSu` của `moc_so_sanh`) yếu, vì mỗi thứ trong phần học mới có 1–2 ngày. Hồ sơ ngày thường / cuối tuần (H, chỉ phần học) mạnh hơn nhiều:
+
+    | MAE ô (điểm %) | 15 phút | 30 phút | 60 phút |
+    |---|---|---|---|
+    | lịch sử theo thứ (mốc tiêu chí) | 7,77 | 7,76 | 7,76 |
+    | hồ sơ ngày thường / cuối tuần | 6,57 | 6,56 | 6,52 |
+    | GBM + hồ sơ | 5,48 | 6,16 | 6,29 |
+    | Graph WaveNet che sự cố | 5,78 | 6,24 | 6,30 |
+    | giữ nguyên | 6,28 | 8,11 | 9,64 |
+
+    GBM thấp hơn hồ sơ ngày thường / cuối tuần chỉ **16,7 / 6,0 / 3,5%**, so với 29,5 / 20,6 / 18,8% khi so với mốc tiêu chí.
+    - Đã đưa mốc này vào `moc_so_sanh.py` (`ho_so`). Chạy lại 14:21 → 14:46 (`moc_2026-11-13_1446.json`), khớp đúng các số trên.
+    - **Theo ngày:** ngày thường 09–12/11 ở 60 phút GBM 6,15–6,41 so với hồ sơ 6,16–6,37, tức NGANG. Ở 30 phút hơn 1–2,5%; ở 15 phút hơn ~13%. Lợi thế chung ở 60 phút gần như chỉ đến từ tối Chủ nhật 08/11, lúc hồ sơ cuối tuần còn quá ít mẫu (MAE 10,3–11,6).
+    - F1 kẹt của hồ sơ: 0,591 / 0,591 / 0,594. GBM 0,641 / 0,591 / 0,573 (60 phút KÉM hồ sơ); Graph WaveNet 0,637 / 0,605 / 0,601 (chỉ hơn hồ sơ 0,007–0,014).
+    - Nghĩa là: giá trị của dự báo nằm chủ yếu ở 15–30 phút tới. Ở 60 phút, mô hình hội tụ về hồ sơ lịch sử, đúng như thường gặp ở dự báo giao thông tầm xa.
+  - Ở mức cạnh (ban ngày 09/11, 11/11, khe 45–60 phút), ls, GBM và Graph WaveNet gần như bằng nhau: MAE r 8,2–8,3; sai thời gian 18,2–18,7%. Sai trong nội bộ đoạn (cạnh khác đoạn) lớn hơn hẳn phần dự báo cải thiện.
+  - Mọi cách (trừ biết trước) đều đoán lạc quan: ở mức cạnh nghĩ nhanh hơn thật 7–10% (GBM −9,1 .. −9,8%, ls −6,8 .. −7,6%); giờ đến hứa sớm 1,2–1,5 phút.
+    - Nguyên nhân có thể: lấy TB r của đoạn thay cho TB thời gian (TB điều hòa); bộ định tuyến chọn đúng những cạnh bị đoán nhanh hơn thật.
+    - Chưa sửa, vì sửa (hiệu chỉnh lệch) phải chọn hệ số trên dữ liệu ngoài 4 ngày chấm.
+- **Rủi ro cho tiêu chí ≥ 10% ở lần train cuối (mức nghiêm trọng: trung bình – cao):**
+  - Khi có nhiều tuần, mốc lịch sử theo thứ sẽ mạnh lên, có thể gần bằng hoặc hơn hồ sơ ngày thường / cuối tuần. Khi đó GBM ở 60 phút có thể chỉ còn hơn khoảng 3–6%, tức KHÔNG đạt 10%.
+  - Hiện vẫn đạt đúng như tiêu chí đã đặt từ trước, nhưng báo cáo PHẢI ghi thêm mốc hồ sơ ngày thường / cuối tuần cho trung thực.
+  - Việc tiếp: mỗi lần train lại thì tính cả hai mốc; thêm hồ sơ theo từng thứ làm đặc trưng khi đủ ≥ 3 tuần mỗi thứ; thử hiệu chỉnh lệch lạc quan.
+
+### 2. Lớp dự báo trên API / web
+
+- `GET /api/du-bao?luc=&tam=15|30|45|60` (`dich_vu.du_bao`): r dự báo GBM + hồ sơ từng đoạn chính cho khung f + tam.
+  - f = khung 15 phút vừa ĐỦ lúc lần chụp gần luc (f + 10 phút ≤ lần chụp), nên chỉ dùng dữ liệu có tới lúc đó.
+  - Chỉ có ở khoảng ngoài mẫu (phần kiểm tra của mô hình); ngoài khoảng đó báo lỗi rõ ràng.
+  - `/api/thong-tin` trả thêm `khoang_du_bao`.
+- Web: ô "Kẹt xe theo: bây giờ / dự báo 15 / 30 / 60 phút tới" thay ô "gắn sau lần train chính".
+- Giới hạn:
+  - Dự báo đọc từ tệp đã tính sẵn (`mo_hinh/ket_qua/du_bao_gbm_ls_*.parquet`, không lên git). Chưa có dự báo "bây giờ" cho dữ liệu mới.
+  - Muốn có thì phải lưu mô hình rồi chạy trên khung vàng mới nhất sau mỗi lần dựng lại; chưa làm.
+  - Máy không có tệp này (vd khi đưa API lên VPS): lớp dự báo báo "chưa có" và mọi phần khác vẫn chạy; kiểm ở mục web bên dưới.
+- Kiểm trên trình duyệt (13/11, `preview thuc-tap-web`):
+  - 10/11 08:00, tầm 30: dùng khung 07:45, dự báo cho 08:15–08:30, 5.731 đoạn.
+  - 01/11 (ngoài khoảng): báo "Chua co du bao…".
+  - Tầm sai (20): lỗi 400.
+  - Quay về "bây giờ" vẫn vẽ đúng.
+  - Không có lỗi phía máy chủ.
+
+### 3. Đề tài trả lời được gì (sau QĐ-026 → QĐ-028) và việc còn lại
+
+- Các tiêu chí đặt từ 29/10 đều ĐẠT:
+  - dự báo thấp hơn mốc lịch sử theo thứ 29,5 / 20,6 / 18,8%;
+  - tuyến tối ưu nhanh hơn ngắn nhất 11,9% và không chậm hơn ở 85% chuyến;
+  - trả tuyến dưới 2 giây.
+- Câu trả lời trung thực về "dự báo giúp định tuyến thế nào":
+  1. Chuyến đi ngay: không giúp đo được. Trần 2,3%; tính lại giữa đường lấy 1,5%.
+  2. Chuyến lập trước 30 phút: thắng giữ nguyên (1,6–1,8% thời gian, giờ đến sai ít hơn 25%), nhưng ngang hồ sơ lịch sử.
+  3. Học sâu bắt kẹt 30–60 phút tốt hơn GBM, vượt nhiễu (QĐ-027).
+  4. Ở 45–60 phút, phần dự báo được gần như đã nằm trong hồ sơ. Đây là giới hạn của dữ liệu đo ở khung 15 phút, chứ không phải do thiếu ngày (đường cong học phẳng).
+- Bỏ qua "E + dự báo" (tính lại giữa đường có dùng dự báo): đi ngay thì dự báo ≈ 0, còn tầm xa thì dự báo ≈ hồ sơ, nên khó hơn E được. Ghi lại để không làm lại.
+- Việc còn lại:
+  - mốc hồ sơ ngày thường / cuối tuần vào `moc_so_sanh.py` (báo cả hai mốc);
+  - hiệu chỉnh lệch lạc quan (chọn hệ số ngoài ngày chấm);
+  - hồ sơ theo từng thứ khi đủ tuần;
+  - thử D11 Kaggle 2020–21 cho hồ sơ dài hạn;
+  - phạt đường đóng theo lần gặp (QĐ-023);
+  - dự báo "bây giờ" cho dữ liệu mới (lưu mô hình).
