@@ -15,12 +15,15 @@ Dữ liệu còn ít ngày thì số chỉ để KIỂM ĐƯỜNG ỐNG, chưa k
 
 Mỗi vòng lưu điểm dừng: máy tắt / ngủ giữa chừng thì chạy lại với --tiep (cùng dữ liệu).
 
-Chạy:  python hoc_sau_hcm.py [gwn|gru] [--ho-so] [--them-kenh] [--che-su-co] [--so-vong=200] [--tiep]
+Chạy:  python hoc_sau_hcm.py [gwn|gru] [--ho-so] [--them-kenh] [--che-su-co] [--so-vong=200] [--tiep] [--chi-du-bao] [--bo-dau=0.5]
        --ho-so: học phần chênh so với hồ sơ lịch sử của đoạn ở giờ đích (ho_so_lich_su.py, QĐ-020).
        --them-kenh (cần --ho-so): thêm sự cố, phần đường đóng, mưa dự báo, tình trạng chung — để so công bằng với GBM.
        --che-su-co (cần --them-kenh): lúc học che kênh sự cố ở 20% mẫu như khi TomTom mất dữ liệu (QĐ-026).
+       --chi-du-bao: không học, nạp .pt đã train (cùng cờ, cùng dữ liệu), chấm lại và ghi dự báo phần kiểm tra.
+       --bo-dau=X: bỏ phần X đầu (ngày cũ nhất) của phần học, kể cả khi dựng hồ sơ — đường cong học (QĐ-027).
 Ra:    mo_hinh/ket_qua/hoc_sau/hcm_<mô hình>_<ngày cuối của dữ liệu>.json + .pt — giữ lại từng lần train để
        so độ ổn định qua các tuần (tính từ dữ liệu TomTom — không lên git)
+       + _du_bao.parquet: dự báo phần kiểm tra (khung t, đoạn, r, du_15/30/45/60) cho so_sanh_du_bao.py và chấm tuyến
 """
 import glob
 import json
@@ -68,6 +71,17 @@ def nap_vang(cot_them=()):
     return pd.DatetimeIndex(khung), doan, R, them
 
 
+def luu_du_bao(tep, khung, doan, R, mau_kt, du):
+    """Dự báo phần kiểm tra -> parquet, một dòng cho mỗi ô (khung t, đoạn) có r(t): du_<p> = r dự báo ở t + p phút."""
+    r = R[mau_kt]
+    t_i, n_i = np.nonzero(~np.isnan(r))
+    bang = pd.DataFrame({'khung': khung[mau_kt][t_i], 'doan': doan[n_i], 'r': r[t_i, n_i]})
+    for b in range(RA):
+        bang[f'du_{15 * (b + 1)}'] = np.clip(du[t_i, b, n_i], 0, 1).astype(np.float32)
+    bang.to_parquet(tep + '_du_bao.parquet', index=False)
+    return len(bang)
+
+
 def do_thi(doan):
     """Đồ thị thưa giữa các đoạn: i -> j khi đoạn j bắt đầu ở nút cuối đoạn i; + vòng tự thân."""
     d = pd.read_parquet(os.path.join(GOC, 'du_lieu', 'bac', 'doan.parquet'),
@@ -101,6 +115,8 @@ def main():
     if dung_them and not dung_ho_so:
         sys.exit('--them-kenh can --ho-so')
     ty_le_che = TY_LE_CHE if '--che-su-co' in sys.argv else 0.0
+    chi_du_bao = '--chi-du-bao' in sys.argv
+    bo_dau = next((float(a.split('=', 1)[1]) for a in sys.argv if a.startswith('--bo-dau=')), 0.0)
     if ty_le_che and not dung_them:
         sys.exit('--che-su-co can --them-kenh')
     khung, doan, R, them = nap_vang(COT_THEM if dung_them else ())
@@ -108,10 +124,11 @@ def main():
     A, so_canh = do_thi(doan)
     cat = int(T * TY_LE_HOC)
     het_hoc, dau_kiem = cat - 1, min(cat + KHOANG_HO, T - 1)
+    dau = int(cat * bo_dau)
     co = ~np.isnan(R)
-    tb, ls = float(np.nanmean(R[:cat])), float(np.nanstd(R[:cat]))
+    tb, ls = float(np.nanmean(R[dau:cat])), float(np.nanstd(R[dau:cat]))
     print(f'{T} khung ({khung[0]} -> {khung[-1]}), {N:,} doan, {so_canh:,} cap doan noi tiep; co so do '
-          f'{co.mean():.1%}; hoc toi {khung[het_hoc]} | kiem tu {khung[dau_kiem]}; r TB {tb:.3f} LC {ls:.3f}')
+          f'{co.mean():.1%}; hoc {khung[dau]} -> {khung[het_hoc]} | kiem tu {khung[dau_kiem]}; r TB {tb:.3f} LC {ls:.3f}')
 
     # Đệm NaN trước (VAO−1 khung) và sau (RA khung): mẫu t = khung hiện tại; vào Rp[t:t+VAO] = khung t−7..t,
     # ra Rp[t+VAO:t+VAO+RA] = khung t+1..t+4.
@@ -129,7 +146,7 @@ def main():
     # (hồ sơ đã chống rò rỉ, ho_so_lich_su.py) thay vì học từ mức trung bình chung.
     Hv = None
     if dung_ho_so:
-        Hp = np.concatenate([np.full((VAO - 1, N), np.nan, np.float32), ho_so(R, khung, cat),
+        Hp = np.concatenate([np.full((VAO - 1, N), np.nan, np.float32), ho_so(R, khung, cat, dau),
                              np.full((RA, N), np.nan, np.float32)])
         Hv = torch.tensor(Hp, device=tb_)
 
@@ -184,7 +201,7 @@ def main():
 
     # Mẫu học: có ít nhất một nhãn; 10% cuối (theo thời gian) làm kiểm định.
     co_nhan = np.array([co[t + 1:t + 1 + RA].any() for t in range(T)])
-    hoc_tat = np.arange(het_hoc + 1)[co_nhan[:het_hoc + 1]]
+    hoc_tat = np.arange(dau, het_hoc + 1)[co_nhan[dau:het_hoc + 1]]
     # Ít nhất 96 khung = trọn một ngày: lần train 06/11 kiểm định 54 khung, phần lớn là đêm dễ đoán, nên dừng
     # sớm theo số quá lạc quan (kiểm định 5,10 so với kiểm tra 6,24–6,73).
     so_kd = min(max(96, int(len(hoc_tat) * TY_LE_KIEM_DINH)), len(hoc_tat) // 2)
@@ -203,6 +220,8 @@ def main():
         ten_mh += '_them'
     if ty_le_che:
         ten_mh += '_che'
+    if bo_dau:
+        ten_mh += f'_bd{round(100 * bo_dau)}'
     mh = mh.to(tb_)
     toi_uu = torch.optim.Adam(mh.parameters(), lr=1e-3, weight_decay=1e-4)
     print(f'{ten_mh}: {sum(p.numel() for p in mh.parameters()):,} tham so; mau hoc/kiem dinh/kiem tra '
@@ -221,13 +240,15 @@ def main():
     tep = os.path.join(RA_THU_MUC, f'hcm_{ten_mh}_{khung[-1]:%Y-%m-%d}')
     os.makedirs(RA_THU_MUC, exist_ok=True)
     vong0, tot_nhat, chua_tot, lich_su = 0, float('inf'), 0, []
+    if chi_du_bao and not os.path.exists(tep + '.pt'):
+        sys.exit(f'--chi-du-bao: chua co {tep}.pt')
     if '--tiep' in sys.argv and os.path.exists(tep + '_dang.pt'):
         dd = torch.load(tep + '_dang.pt', map_location=tb_, weights_only=False)
         mh.load_state_dict(dd['mh'])
         toi_uu.load_state_dict(dd['toi_uu'])
         vong0, tot_nhat, chua_tot, lich_su, rng = dd['vong'], dd['tot_nhat'], dd['chua_tot'], dd['lich_su'], dd['rng']
         print(f'Chay tiep tu vong {vong0}', flush=True)
-    for vong in range(vong0, so_vong):
+    for vong in range(vong0, 0 if chi_du_bao else so_vong):
         t = time.time()
         mat = []
         tron = rng.permutation(mau_hoc)
@@ -260,6 +281,7 @@ def main():
 
     mh.load_state_dict(torch.load(tep + '.pt', map_location=tb_))
     du = du_doan(mau_kt).cpu().numpy()
+    print(f'du bao phan kiem tra: {luu_du_bao(tep, khung, doan, R, mau_kt, du):,} o -> {tep}_du_bao.parquet')
     kq = {}
     print(f'\nKiem tra ({len(mau_kt)} khung tu {khung[dau_kiem]}), MAE diem %:')
     for p, b in BUOC.items():
@@ -278,8 +300,11 @@ def main():
               f'{n["mae_dang_dong_ket"]} | dung 3 muc {g["dung_3_muc"]:.1%} -> {n["dung_3_muc"]:.1%} | '
               f'F1 3 muc {g["f1_3_muc"]} -> {n["f1_3_muc"]} | F1 ket {g["f1_ket"]} -> {n["f1_ket"]} | {n["n"]:,} o')
         print(f'        theo ngay {kq[p]["mae_theo_ngay"][ten_mh]}', flush=True)
+    if chi_du_bao:
+        return
     with open(tep + '.json', 'w', encoding='utf-8') as f:
-        json.dump({'mo_hinh': ten_mh, 'khung': [str(khung[0]), str(khung[-1])], 'hoc_toi': str(khung[het_hoc]),
+        json.dump({'mo_hinh': ten_mh, 'khung': [str(khung[0]), str(khung[-1])], 'hoc_tu': str(khung[dau]),
+                   'hoc_toi': str(khung[het_hoc]),
                    'kiem_tu': str(khung[dau_kiem]), 'so_doan': N, 'so_vong': len(lich_su),
                    'ket_qua': kq, 'lich_su': lich_su}, f, ensure_ascii=False, indent=1)
     print(f'-> {tep}.json ({(time.time() - t_bat_dau) / 60:.1f} phut)')

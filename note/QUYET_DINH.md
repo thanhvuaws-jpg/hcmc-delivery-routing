@@ -560,10 +560,135 @@ Dữ liệu 29/10 18:45 → 12/11 22:30 (1.360 khung, 7.485 đoạn). Học tớ
   - GBM + hồ sơ 6,55 / 7,34 / 7,29, so với ngày thường 5,33–5,53 / 6,01–6,23 / 6,15–6,41.
   - Học sâu + hồ sơ còn kém bản không hồ sơ (Graph WaveNet 60 phút: 8,73 so với 7,73). Hồ sơ cuối tuần buổi tối mới có 3 tối (31/10, 01/11, 07/11).
   - Tập kiểm tra chỉ có một tối cuối tuần, nên chưa đo được cuối tuần cho ra hồn.
-- **Đề xuất, chờ người dùng duyệt:** nối GBM + hồ sơ vào định tuyến trước, vì MAE thấp nhất ở 15–30 phút, chạy CPU và không hỏng khi mất sự cố. Mô hình học sâu đem so khi chấm tuyến là Graph WaveNet + hồ sơ + thêm kênh + che sự cố (thay cho bản không che).
-- **Việc tiếp:**
-  1. ~~đọc kết quả `--che-su-co`~~ (xong, xem trên);
-  2. đường cong học;
-  3. bootstrap F1 kẹt giữa học sâu và GBM;
-  4. thử trung bình dự báo GBM + Graph WaveNet che sự cố (hai mô hình sai ở chỗ khác nhau: GBM tốt tối Chủ nhật, Graph WaveNet tốt ngày thường ở 60 phút);
-  5. nối dự báo vào định tuyến rồi chấm lại.
+- **Đề xuất:** nối GBM + hồ sơ vào định tuyến trước, vì MAE thấp nhất ở 15–30 phút, chạy CPU và không hỏng khi mất sự cố. Mô hình học sâu đem so khi chấm tuyến là Graph WaveNet + hồ sơ + thêm kênh + che sự cố (thay cho bản không che). **Người dùng duyệt 13/11 ("ok làm đi") → QĐ-027.**
+- **Việc tiếp:** chuyển sang QĐ-027.
+
+## QĐ-027 — Gộp hai mô hình, kiểm ý nghĩa thống kê, nối dự báo vào định tuyến, đường cong học (13/11/2026, người dùng: "ok làm đi")
+
+Người dùng duyệt đề xuất cuối QĐ-026 và việc tiếp. Cùng tập kiểm tra như QĐ-026 (08/11 17:30 → 12/11 22:30).
+
+### 1. So GBM + hồ sơ với Graph WaveNet che sự cố trên cùng ô; trung bình hai mô hình; bootstrap
+
+- Mã: `hoc_sau_hcm.py --chi-du-bao` (nạp `.pt` đã train, chấm lại, ghi `_du_bao.parquet`); `mo_hinh/so_sanh_du_bao.py` (train lại GBM + hồ sơ, ghi `ket_qua/du_bao_gbm_ls_2026-11-12.parquet`, so, bootstrap). Log `mo_hinh/ket_qua/so_sanh_du_bao_2026-11-13.log`.
+- Tái lập: GBM + hồ sơ 5,477 / 6,162 / 6,295 và Graph WaveNet 5,791 / 6,251 / 6,303, **trùng từng số** với lần train (cả MAE theo ngày). 2.907.799 ô có r(t), hai bên khớp 100%.
+- **Trung bình 0,5 / 0,5** (trọng số chọn trước, không dò trên tập kiểm tra):
+
+  | MAE (điểm %) | 15 phút | 30 phút | 60 phút |
+  |---|---|---|---|
+  | GBM + hồ sơ | **5,477** | 6,162 | 6,295 |
+  | Graph WaveNet che sự cố | 5,791 | 6,251 | 6,303 |
+  | trung bình | 5,556 | **6,141** | **6,243** |
+  | F1 kẹt: GBM / Graph WaveNet / trung bình | 0,641 / 0,637 / 0,643 | 0,591 / 0,605 / 0,602 | 0,573 / 0,601 / 0,591 |
+
+  Trung bình tốt hơn GBM 0,3% ở 30 phút, 0,8% ở 60 phút, nhưng kém 1,4% ở 15 phút. Lợi quá nhỏ so với việc phải chạy thêm GPU khi phục vụ, nên **chưa dùng**. Lần train cuối sẽ chọn trọng số trên tập kiểm định, không chọn trên tập kiểm tra.
+- **Bootstrap theo khối (ngày, giờ)**, 2.000 lần, 101–102 khối; chênh = Graph WaveNet − GBM:
+
+  | | 15 phút | 30 phút | 60 phút |
+  |---|---|---|---|
+  | chênh MAE | +0,31 [+0,27; +0,35] | +0,09 [+0,04; +0,13] | +0,01 [−0,05; +0,07] |
+  | chênh F1 kẹt | −0,004 [−0,007; −0,000] | **+0,015 [+0,011; +0,019]** | **+0,027 [+0,022; +0,035]** |
+
+  - **Học sâu bắt kẹt 30–60 phút tốt hơn GBM, vượt nhiễu** theo phép thử này (QĐ-026 mới ghi "chưa kiểm"). MAE: GBM tốt hơn ở 15–30 phút, 60 phút hòa.
+  - Giới hạn: khối (ngày, giờ) chưa tính phụ thuộc giữa các giờ trong cùng một ngày, nên khoảng thật có thể rộng hơn. Tập kiểm tra chỉ có 4 ngày thường và một tối Chủ nhật. Cách che sự cố nghĩ ra sau khi nhìn tập kiểm tra (QĐ-026).
+
+### 2. Nối dự báo vào định tuyến
+
+- Mã:
+  - `ba_phuong_an.DinhTuyen.dat_du_bao(r_khe, moc_s)`: r mỗi cạnh theo khe thời gian KỂ TỪ LÚC XUẤT PHÁT; thời gian và phạt kẹt theo r của khe xe tới cạnh.
+  - Cận ALT và v_max lấy r lớn nhất qua các khe, nên vẫn là cận dưới.
+  - `dinh_tuyen/kiem_tra_du_bao.py` ĐẠT:
+    - không bật dự báo thì trùng bản cũ 18/18;
+    - mọi khe bằng tình trạng lúc đi thì trùng chế độ giữ nguyên 18/18;
+    - có / không ALT cùng chi phí 18/18 (2 cặp tới Lăng Cha Cả không có đường ở cả hai vì đường đóng 10/11);
+    - mốc khe đúng.
+- `cham_tuyen_that.py --du-bao=gbm_ls` thêm 3 phương án:
+  - F: nhanh nhất theo dự báo;
+  - G: tối ưu theo dự báo;
+  - H: tối ưu khi BIẾT TRƯỚC r thật từng khe (trần của mọi bộ dự báo, không làm được ngoài đời).
+  - Chỉ chấm 4 ngày thường 09–12/11, vì chúng nằm trọn trong phần kiểm tra của GBM. Dự báo lấy ở khung 15 phút vừa xong (lúc đi − 15 phút).
+- **Bản đầu sai cách đem dự báo xuống cạnh** ("cong": r lần chụp lúc đi + (dự báo − r của đoạn ở khung vừa xong)). Chấm 09/11:
+  - F CHẬM hơn C 0,47%; G ≈ D (+0,03%); H nhanh hơn D 2,34%.
+  - Đoán giờ đến: F sai 0,87 phút, C sai 0,79 phút.
+  - F đổi tuyến so với C ở 64% chuyến: nhanh hơn 19%, chậm hơn 33%.
+  - Tệp `cham_tuyen_2026-11-09_zenodo_dubao-gbm_ls-cong.csv`, log `chay_du_bao_gbm_ls-cong.log`.
+- **Tìm nguyên nhân bằng `danh_gia/kiem_du_bao_canh.py` trên tối 08/11.** Ngày này thuộc phần kiểm tra nhưng KHÔNG nằm trong 4 ngày chấm, nên chọn cách mà không nhìn ngày đem chấm. Sai thời gian qua cạnh tương đối, trọng số chiều dài:
+
+  | khe sau lúc đi | giữ nguyên lần chụp | cong | mức dự báo của đoạn | nửa |
+  |---|---|---|---|---|
+  | 0–15 phút | **10,1%** | 11,8% | 14,8% | 10,4% |
+  | 15–30 | 19,9% | 19,8% | **15,7%** | 19,1% |
+  | 30–45 | 22,0% | 20,7% | **15,7%** | 20,4% |
+  | 45–60 | 23,0% | 20,9% | **15,7%** | 20,7% |
+
+  - Lần chụp lúc đi (vd 06:30) đã nằm TRONG khe 0, còn GBM chỉ thấy khung 06:15–06:25. Vì vậy 15 phút đầu giữ nguyên thắng.
+  - Từ phút 15 trở đi, lần chụp 5 phút của một cạnh rất nhiễu. Cộng phần thay đổi vào đó gần như không giúp; mức dự báo của đoạn (trung bình nhiều cạnh, kéo về hồ sơ) đúng hơn 21–32%.
+  - Nếu canh lúc đi = lần chụp cuối của khung (τ = f + 10 phút), thì mức dự báo thắng cả khe đầu (14,7% so với 16,0%).
+- **Cách dùng ("muc", mặc định):** khe 0–15 phút giữ lần chụp lúc đi; từ phút 15 dùng dự báo 30 / 45 / 60 phút của đoạn chứa cạnh; cạnh không thuộc đoạn có dự báo giữ như C/D. Bản đầu vẫn chạy lại được bằng `--cach-du-bao=cong`.
+- **Kết quả 4 ngày** (09–12/11, 90 cặp điểm giao hàng thật × 10 giờ = 3.600 chuyến). Log `danh_gia/ket_qua/chay_du_bao_gbm_ls.log`, tổng hợp `tong_hop_du_bao_gbm_ls.json`. CI 95% bootstrap theo cặp điểm:
+
+  | so sánh (tổng thời gian thật) | nhanh hơn | CI 95% | chuyến nhanh hơn / chậm hơn |
+  |---|---|---|---|
+  | F nhanh nhất theo dự báo so với C (giữ nguyên) | 0,13% | −0,03 .. 0,28 | 18% / 13% |
+  | **G tối ưu theo dự báo so với D** | **0,15%** | **−0,06 .. 0,36** | 18% / 16% |
+  | H biết trước r thật so với D (trần) | 2,28% | 1,96 .. 2,58 | 48% / 15% |
+  | E tính lại giữa đường mỗi lần chụp mới so với D | 1,48% | 1,23 .. 1,73 | 21% / 3% |
+  | G so với A ngắn nhất | 11,87% | 9,40 .. 14,88 | G không chậm hơn A ở 85,1% chuyến (D 84,8%) |
+
+  - Theo ngày, G so với D: +0,49 / −0,38 / +0,13 / +0,36%; H: 2,34 / 2,19 / 2,17 / 2,42%. Theo giờ, G so với D từ −0,55% (18:00) tới +0,68% (06:30).
+  - Phần trần dự báo lấy được: 6,5% (CI −3 .. 15%).
+  - Giờ đến đoán: C sai TB 0,77 phút (3,2%), F 0,78 phút (3,2%), không hơn.
+- **Kết luận: với chuyến xuất phát NGAY (TB 21 phút), dự báo 15–60 phút KHÔNG làm tuyến nhanh hơn một cách đo được.** CI chứa 0, nên không được báo là "dự báo giúp định tuyến".
+  - Trần chỉ 2,3%: ngay cả biết trước hoàn toàn tương lai, tuyến cũng chỉ nhanh hơn chừng đó.
+  - E (tính lại giữa đường bằng lần chụp mới) đã lấy được 1,48%, tức 65% trần, mà không cần dự báo.
+- **Không phải vì dự báo sai ở mức cạnh** (kiểm thêm để GIẢI THÍCH, không dùng để chỉnh lại; `kiem_du_bao_canh.py` 06:30–19:30 trên 09/11 và 11/11):
+  - Sai thời gian qua cạnh, mức dự báo so với giữ nguyên: 18,1–18,3% so với 22,4–22,6% ở khe 15–30 phút; 18,3–18,5% so với 25,4–25,7% ở khe 30–45 phút.
+  - 15 phút đầu giữ nguyên vẫn thắng (10,7–10,9% so với 16,9%).
+  - Lý do còn lại: chuyến TB 21 phút nên phần lớn thời gian nằm ở 15 phút đầu, nơi dự báo không giúp. Thêm nữa, sai số chung cho mọi tuyến không làm đổi lựa chọn tuyến.
+- Bản đầu ("cong", chỉ 09/11): G so với D +0,03%, F so với C −0,47%. Ghi lại để thấy cách đem dự báo xuống cạnh quan trọng thế nào.
+- **Ý nghĩa cho đề tài** (chưa chốt, chờ người dùng):
+  - Dự báo có ích ở chỗ "giữ nguyên" yếu, tức tầm 30–60 phút (MAE 6,2–6,3 so với 8,1–9,6): chuyến hẹn đi sau 30–60 phút, ước giờ giao cho đơn đặt trước, cảnh báo kẹt sắp tới.
+  - Đề xuất phép chấm tiếp: lập tuyến lúc p cho chuyến đi lúc p + 30. So 3 cách: giữ nguyên lần chụp lúc p, hồ sơ giờ, dự báo. Đo cả thời gian thật lẫn sai giờ đến.
+  - Với chuyến đi ngay: cách có lợi đo được là tính lại giữa đường (E).
+
+### 3. Đường cong học (bỏ ngày cũ nhất, giữ ngày gần tập kiểm tra; hồ sơ cũng chỉ từ phần còn lại)
+
+- Mã: `ho_so(..., dau)`, `BangHoc.dat_bo_dau()`, `mo_hinh/duong_cong_hoc.py` (GBM), `hoc_sau_hcm.py --bo-dau=X`. Có test mới `test_ho_so_bo_ngay_dau`; tổng 67/67 test qua.
+- **GRU + hồ sơ** (log `mo_hinh/ket_qua/duong_cong_hoc_gru_2026-11-13.log`):
+
+  | phần học | từ | mẫu học | MAE 15 / 30 / 60 | 60 phút ngày thường 09–12/11 | F1 kẹt 30 / 60 |
+  |---|---|---|---|---|---|
+  | 50% (4,9 ngày) | 03/11 17:30 | 380 | 6,28 / 6,80 / 6,84 | 6,53–6,74 | 0,601 / 0,597 |
+  | 75% (7,4 ngày) | 01/11 06:00 | 618 | 5,92 / 6,36 / 6,38 | 6,23–6,47 | 0,604 / 0,599 |
+  | 100% (9,9 ngày) | 29/10 18:45 | 855 | 5,79 / 6,36 / 6,34 | 6,12–6,38 | 0,617 / 0,601 |
+
+  - Từ 50% lên 75%: MAE giảm 6–7%. Từ 75% lên 100%: giảm 2,2 / 0 / 0,6% (ngày thường 1–1,7%). **Thêm ngày vẫn giúp nhưng chậm dần.**
+  - Phần lớn lợi ích nhiều khả năng đến từ hồ sơ có thêm ngày cùng loại. Giả thuyết "855 mẫu quá ít cho học sâu" (QĐ-026) chỉ đúng một phần.
+  - Tối Chủ nhật 08/11 (60 phút): 9,97 → 7,58 → 8,29, không đều. Phần học 50% chỉ có một cuối tuần, nên bớt ngày và bớt cuối tuần lẫn vào nhau.
+  - Mới một hạt giống ngẫu nhiên; vòng tốt nhất 19 / 36 / 7 rất khác nhau, nên số lẻ dưới 1% là nhiễu.
+- **GBM + hồ sơ** (`duong_cong_hoc.py`, log `mo_hinh/ket_qua/duong_cong_hoc_gbm_ls_2026-11-13.log`; lượt 100% trùng đúng 5,477 / 6,162 / 6,295):
+
+  | phần học | dòng học | MAE 15 / 30 / 60 | thấp hơn lịch sử (cùng phần học) | 60 phút ngày thường | F1 kẹt 30 / 60 |
+  |---|---|---|---|---|---|
+  | 50% (4,9 ngày) | 3,44 tr | 5,572 / 6,356 / 6,650 | 24,8 / 14,2 / 10,1% | 6,40–6,72 | 0,571 / 0,539 |
+  | 75% (7,4 ngày) | 5,16 tr | 5,495 / 6,180 / 6,331 | 29,6 / 20,8 / 18,8% | 6,21–6,43 | 0,592 / 0,576 |
+  | 100% (9,9 ngày) | 6,87 tr | 5,477 / 6,162 / 6,295 | 29,5 / 20,6 / 18,8% | 6,15–6,41 | 0,591 / 0,573 |
+
+  - Từ 50% lên 75%: MAE giảm 1,4 / 2,8 / 4,8%. Từ 75% lên 100%: chỉ giảm 0,3 / 0,3 / 0,6%. **GBM gần bão hòa theo số ngày** với bộ đặc trưng hiện tại. GRU chậm lại tương tự (0–2%).
+- **Ý nghĩa cho lần train cuối (2–3 tháng):**
+  - Đừng chờ MAE giảm nhiều nhờ thêm ngày thường.
+  - Lợi ích chờ được: đủ cuối tuần (hiện chỉ 2 trong phần học); có hồ sơ theo TỪNG thứ thay vì chỉ ngày thường / cuối tuần; có thể gặp mưa to; có tập kiểm tra sạch (bật `--che-su-co` từ đầu, chọn trọng số gộp trên kiểm định).
+  - Muốn MAE giảm thêm thì phải có thông tin mới (đặc trưng, nguồn), không phải thêm ngày.
+- Giới hạn: bỏ ngày cũ cũng bỏ bớt cuối tuần; mới một lần chia; GBM có `random_state` cố định, nên khác nhau dưới 0,5% có thể là nhiễu do chọn phần học.
+
+### 4. Tóm tắt và việc tiếp
+
+- Đạt / có số:
+  - học sâu bắt kẹt 30–60 phút tốt hơn GBM, vượt nhiễu;
+  - gộp hai mô hình lợi rất ít;
+  - dự báo KHÔNG làm tuyến đi ngay nhanh hơn đo được (trần 2,3%, tính lại giữa đường lấy 1,5%);
+  - thêm ngày giúp chậm dần.
+- Việc tiếp, chờ người dùng chọn:
+  1. chấm "lập tuyến trước 30 phút" (chỗ dự báo có lợi thế lớn nhất so với giữ nguyên);
+  2. E + dự báo (tính lại giữa đường có dùng dự báo);
+  3. đưa dự báo vào API / web (giờ đến dự kiến theo dự báo, cảnh báo kẹt 30–60 phút tới);
+  4. phạt đường đóng theo lần gặp (việc cũ từ QĐ-023).

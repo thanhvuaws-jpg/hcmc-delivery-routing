@@ -4,6 +4,31 @@ Mục mới nhất ở trên cùng.
 
 > 30/10/2026 11:53: các mục trong ngày từng ghi giờ ước chừng (13:00, 14:30…) — SAI, đồng hồ thật khi đó chưa tới 12:00. Đã sửa: chỉ ghi giờ có bằng chứng (giờ tệp, lệnh `date`, giờ trên AWS).
 
+## 13/11/2026 (05:2x → 11:0x) — gộp mô hình, bootstrap, nối dự báo vào định tuyến, đường cong học (QĐ-027)
+
+- Người dùng: "ok làm đi" (duyệt đề xuất cuối QĐ-026). Đẩy git trước: nhánh `train-chinh-12-11`, commit 920f35f, `main` tiến nhanh tới đó.
+- `hoc_sau_hcm.py --chi-du-bao`: xuất dự báo phần kiểm tra của Graph WaveNet che sự cố, tái lập đúng 5,79 / 6,25 / 6,30.
+- `mo_hinh/so_sanh_du_bao.py`, 15 phút, log `so_sanh_du_bao_2026-11-13.log`:
+  - GBM + hồ sơ tái lập đúng 5,477 / 6,162 / 6,295.
+  - Trung bình hai mô hình chỉ hơn GBM 0,3–0,8% ở 30–60 phút, kém 1,4% ở 15 phút → chưa dùng.
+  - Bootstrap khối (ngày, giờ): học sâu bắt kẹt 30–60 phút tốt hơn GBM vượt nhiễu (+0,015 / +0,027 F1).
+- Định tuyến:
+  - `ba_phuong_an.dat_du_bao` (khe thời gian kể từ lúc đi); `kiem_tra_du_bao.py` ĐẠT 4 mục.
+  - `cham_tuyen_that.py --du-bao` thêm F, G, H.
+  - Bản đầu ("cong") chấm 09/11 kém C → dừng lượt đó.
+  - `kiem_du_bao_canh.py` trên tối 08/11 cho thấy phải dùng mức dự báo của đoạn từ phút 15, giữ nguyên 15 phút đầu → sửa ("muc"), chấm lại 4 ngày 09:00 → 10:27.
+  - **G so với D 0,15% (CI −0,06 .. 0,36), trần biết trước 2,28%, E tính lại 1,48%** → dự báo không làm tuyến đi ngay nhanh hơn đo được.
+- Đường cong học GRU + hồ sơ: 50 / 75 / 100% → 60 phút 6,84 / 6,38 / 6,34; thêm ngày vẫn giúp nhưng chậm dần. GBM + hồ sơ 10:30 → 11:00: 6,65 / 6,33 / 6,30 → từ 75% lên 100% chỉ giảm 0,3–0,6%, gần bão hòa.
+- Tệp mới:
+  - `mo_hinh/so_sanh_du_bao.py`, `mo_hinh/duong_cong_hoc.py`;
+  - `dinh_tuyen/kiem_tra_du_bao.py`;
+  - `danh_gia/kiem_du_bao_canh.py`, `danh_gia/tong_hop_du_bao.py`.
+- Tệp sửa:
+  - `ba_phuong_an.py`, `cham_tuyen_that.py`, `hoc_sau_hcm.py` (`--chi-du-bao`, `--bo-dau`);
+  - `dac_trung.py` (`dat_bo_dau`), `ho_so_lich_su.py` (`dau`);
+  - test `test_ho_so_bo_ngay_dau` (67/67 qua).
+- Chưa commit.
+
 ## 13/11/2026 (03:54 → 05:2x) — đọc kết quả lần train chính (QĐ-026), thử che kênh sự cố
 
 - 9 bước chạy 22:54 → 03:54, không lỗi. Thời gian:

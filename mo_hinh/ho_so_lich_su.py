@@ -15,11 +15,12 @@ Loại ngày: ngày thường / cuối tuần (chưa tách từng thứ — mớ
 import numpy as np
 
 
-def ho_so(R, khung, cat):
+def ho_so(R, khung, cat, dau=0):
     """
     R (T, N): r theo khung × đoạn, NaN = thiếu. khung: pd.DatetimeIndex độ dài T, cách đều 15 phút.
     cat: số khung đầu thuộc phần học. Trả về H (T, N): H[f, n] = TB r của đoạn n ở các khung học CÙNG loại
     ngày và ô 15 phút với khung f, trừ chính f; NaN nếu không có khung nào như vậy.
+    dau: chỉ khung [dau, cat) đóng góp (đường cong học: học với ít ngày hơn, hồ sơ cũng chỉ từ chừng đó ngày).
     """
     T, N = R.shape
     cuoi = np.asarray(khung.dayofweek >= 5, dtype=np.int64)
@@ -27,10 +28,10 @@ def ho_so(R, khung, cat):
     co = ~np.isnan(R)
     gia_tri = np.where(co, R, 0).astype(np.float64)
     tong, dem = np.zeros((2, 96, N)), np.zeros((2, 96, N))
-    np.add.at(tong, (cuoi[:cat], o[:cat]), gia_tri[:cat])
-    np.add.at(dem, (cuoi[:cat], o[:cat]), co[:cat])
+    np.add.at(tong, (cuoi[dau:cat], o[dau:cat]), gia_tri[dau:cat])
+    np.add.at(dem, (cuoi[dau:cat], o[dau:cat]), co[dau:cat])
     t, d = tong[cuoi, o], dem[cuoi, o]              # (T, N): tổng, số mẫu của nhóm mà từng khung thuộc về
-    t[:cat] -= gia_tri[:cat]                        # khung học: bỏ chính nó (khung thiếu trừ 0)
-    d[:cat] -= co[:cat]
+    t[dau:cat] -= gia_tri[dau:cat]                  # khung học: bỏ chính nó (khung thiếu trừ 0)
+    d[dau:cat] -= co[dau:cat]
     with np.errstate(invalid='ignore', divide='ignore'):
         return np.where(d > 0, t / d, np.nan).astype(np.float32)

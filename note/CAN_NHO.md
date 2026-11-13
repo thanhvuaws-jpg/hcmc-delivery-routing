@@ -132,6 +132,11 @@
   - A* viết bằng Python chậm theo SỐ TRẠNG THÁI: muốn nhanh thì làm cận dưới chặt hơn (ALT theo giờ), đừng thêm mốc (16–24 mốc gần như không đỡ).
   - Bộ chấm tốc độ thật KHÔNG tính trễ ở nút giao (đèn, rẽ trái) → mọi phạt nút giao luôn trông "thiệt" khi chỉ chấm thời gian chạy; phải thử thêm kịch bản trễ giả định cộng ĐỀU cho mọi tuyến.
 - **Kênh "có dữ liệu" mà lúc học luôn bằng 1 thì mạng không biết xử lý khi thiếu** (13/11, QĐ-026): khoảng mất sự cố 09–11/11 nằm trọn trong tập kiểm tra, nên Graph WaveNet thêm kênh kém đi 15–18% đúng hai ngày đó. Nguồn nào có thể mất (TomTom hết hạn mức) thì khi học phải che giả (`--che-su-co`). Đọc MAE THEO NGÀY trước khi kết luận một nhóm đặc trưng "làm hại". Cách sửa nghĩ ra sau khi nhìn tập kiểm tra thì số trên tập đó hơi lạc quan: ghi rõ trong báo cáo và bật cách sửa ngay từ đầu ở lần train cuối.
+- **Dự báo theo ĐOẠN 15 phút đem xuống CẠNH cho định tuyến** (13/11, QĐ-027):
+  - Khung vàng t = ĐẦU khung (t, t+5, t+10). Lúc đi 06:30 thì GBM chỉ có khung 06:15, còn lần chụp 06:30 đã thuộc khung SAU. Vì vậy 15 phút đầu "giữ nguyên lần chụp" thắng mọi dự báo.
+  - Đừng cộng phần thay đổi dự báo vào lần chụp 5 phút của một cạnh: lần chụp đó rất nhiễu. Dùng thẳng mức dự báo của đoạn.
+  - Trước khi chấm tuyến, đo độ đúng ở mức cạnh (`danh_gia/kiem_du_bao_canh.py`), trên ngày KHÔNG đem chấm.
+- Muốn dừng tiến trình bằng psutil theo chuỗi trong dòng lệnh: phải loại PID của chính mình, và loại shell đang chạy lệnh đó, vì dòng lệnh của chúng cũng chứa chuỗi tìm. Không loại thì tự giết mình (exit 15, 13/11).
 - `distances_bay_2017.csv` KHÔNG có dòng tiêu đề, `distances_la_2012.csv` có — đọc kiểu `header=None` rồi bỏ dòng "from" nếu có.
 - Google Drive (thư mục chia sẻ của tác giả bài báo): `gdown.download_folder(id=..., skip_download=True)` để xem mã tệp, rồi `gdown.download(id=...)`.
 - GPU máy nhà: GTX 1650 4 GB, PyTorch 2.6 cu124. Graph WaveNet trên METR-LA ~116 s/vòng (bài báo: 54 s trên Titan Xp) → 100 vòng ≈ 3 giờ: chạy nền, có điểm dừng mỗi vòng (`hoc_sau.py --tiep` khi máy ngủ giữa chừng).

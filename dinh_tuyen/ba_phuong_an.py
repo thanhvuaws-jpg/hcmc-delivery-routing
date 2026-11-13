@@ -8,6 +8,8 @@
                 mức kẹt = max(0, 0,75 − r) / 0,75   (đoạn càng kẹt càng khó đoán giờ tới -> né bớt)
                 mưa ≥ 5 mm/h: +PHAT_NGAP_S['to'] giây mỗi cạnh dễ ngập do mưa (D8, bac/ngap_canh.parquet);
                 1–5 mm/h: +PHAT_NGAP_S['vua']; triều cường (bật tay): cạnh dễ ngập do triều cũng bị phạt.
+Dự báo (QĐ-027, dat_du_bao): r của mỗi cạnh theo THỜI GIAN KỂ TỪ LÚC XUẤT PHÁT (khe 15 phút) thay cho
+  "giữ nguyên tình trạng lúc đi" — thời gian và phạt kẹt đều theo r dự báo ở khe xe tới cạnh.
 Cả 3 đều CẤM cạnh đang đóng hẳn và tôn trọng một chiều / cấm rẽ / cấm xe máy (tim_duong.BanDo).
 Kết quả mỗi phương án được CHẤM LẠI bằng cùng một thước đo thời gian (không tính phạt) để so công bằng.
 
@@ -15,6 +17,7 @@ Kết quả mỗi phương án được CHẤM LẠI bằng cùng một thước
     dt_ = DinhTuyen.nap()
     kq = dt_.tim((10.7725, 106.6980), (10.8010, 106.7110), datetime(2026, 10, 30, 8, 0), mua_mm=0)
 """
+import bisect
 import datetime as dt
 import os
 import sys
@@ -52,6 +55,7 @@ class DinhTuyen:
         self._dai_list = self.dai.tolist()
         self._dau_cuoi = list(bd.G.edges())          # chỉ số cạnh -> (nút đầu, nút cuối)
         self.phat_re_trai_s = PHAT_RE_TRAI_S
+        self.r_khe = self.moc_khe = None               # dự báo theo khe thời gian (dat_du_bao)
         self._dung_alt()
 
     def _dung_alt(self, so_moc=8):
@@ -94,6 +98,8 @@ class DinhTuyen:
             from scipy.sparse import csr_matrix
             from scipy.sparse.csgraph import dijkstra
             r_gio = self.mh.r_gio[[(h0 + j) % 24 for j in range(3)]].max(axis=0).astype(np.float64)
+            if self.r_khe is not None:                  # có dự báo: lấy r LỚN NHẤT qua mọi khe -> vẫn là cận dưới
+                r_gio = np.fmax(r_gio, self.r_khe.max(axis=0))
             r = np.fmax(r_gio, self.mh.r_hien_tai) if dung_ht and self.mh.r_hien_tai is not None else r_gio
             tg = self.dai / (np.maximum(self.mh.v_trong * r, V_SAN_KMH) / 3.6)
             khong_do = ~getattr(self.mh, 'co_so_do', np.ones(len(self.dai), dtype=bool))
@@ -145,21 +151,31 @@ class DinhTuyen:
     def _r(self, i, t_s, t0):
         return self.mh.r_gio[int((t0 + t_s) // 3600) % 24, i]
 
-    def _bang(self, gio, dung_ht):
-        """Bảng tính sẵn cho MỘT giờ: [giây qua từng cạnh], [hệ số phạt kẹt 1 + RUI_RO·kẹt] — list Python
-        (tra list nhanh hơn nhiều so với tra mảng numpy từng phần tử trong vòng lặp A*)."""
-        k = (gio, dung_ht)
+    def _bang(self, gio, dung_ht, khe=-1):
+        """Bảng tính sẵn cho MỘT giờ (hoặc MỘT khe dự báo khi khe ≥ 0): [giây qua từng cạnh], [hệ số phạt kẹt
+        1 + RUI_RO·kẹt], [cạnh kẹt nặng?] — list Python (tra list nhanh hơn nhiều so với tra mảng numpy từng phần
+        tử trong vòng lặp A*)."""
+        k = (gio, dung_ht, khe)
         if k not in self._cache:
-            r = self.mh.r_gio[gio].astype(np.float64)
-            if dung_ht and self.mh.r_hien_tai is not None:
-                r = np.where(np.isnan(self.mh.r_hien_tai), r, self.mh.r_hien_tai)
+            if khe >= 0:
+                r = r_phat = self.r_khe[khe].astype(np.float64)
+            else:
+                r, r_phat = self.mh.r_gio[gio].astype(np.float64), self.mh.r_gio[gio]
+                if dung_ht and self.mh.r_hien_tai is not None:
+                    r = np.where(np.isnan(self.mh.r_hien_tai), r, self.mh.r_hien_tai)
             v = np.maximum(self.mh.v_trong * r, V_SAN_KMH)
             tg = self.dai / (v / 3.6) * (1 + self.mh.phan_dong)
             khong_do = ~getattr(self.mh, 'co_so_do', np.ones(len(self.dai), dtype=bool))
-            he_so = (1 + RUI_RO * np.maximum(0.0, 0.75 - self.mh.r_gio[gio]) / 0.75
+            he_so = (1 + RUI_RO * np.maximum(0.0, 0.75 - r_phat) / 0.75
                      + RUI_RO_KHONG_DO * khong_do)
-            self._cache[k] = (tg.tolist(), he_so.tolist(), (self.mh.r_gio[gio] < 0.4).tolist())
+            self._cache[k] = (tg.tolist(), he_so.tolist(), (r_phat < 0.4).tolist())
         return self._cache[k]
+
+    def _khoa(self, t0, t, dung_ht):
+        """Khóa bảng (giờ, dùng số đo hiện tại, khe) cho xe tới cạnh sau t giây kể từ lúc xuất phát t0."""
+        if self.r_khe is not None:
+            return 0, False, bisect.bisect_right(self.moc_khe, t)
+        return int((t0 + t) // 3600) % 24, dung_ht and t < 1800, -1
 
     def dat_tinh_trang(self, r_moi_gio=None, cam=None, phan_dong=None):
         """
@@ -176,6 +192,21 @@ class DinhTuyen:
             self._cam_list = self.mh.cam.tolist()
         if phan_dong is not None:
             self.mh.phan_dong = np.asarray(phan_dong, dtype=np.float32)
+        self.mh.r_hien_tai = None
+        self.r_khe = self.moc_khe = None
+        self._cache = {}
+        self._alt_bang = {}
+
+    def dat_du_bao(self, r_khe, moc_s):
+        """
+        Dự báo theo THỜI GIAN KỂ TỪ LÚC XUẤT PHÁT (QĐ-027). r_khe (K, n): r mọi cạnh ở khe j; moc_s: K − 1 mốc giây,
+        khe j dùng khi xe tới cạnh trong [moc_s[j − 1], moc_s[j]); khe cuối không có hạn. Gọi SAU dat_tinh_trang
+        (hàm đó xóa dự báo; đường đóng vẫn lấy từ đó). Cần 0 < r ≤ 1 để cận ALT còn đúng.
+        """
+        r_khe = np.asarray(r_khe, dtype=np.float32)
+        if r_khe.shape != (len(moc_s) + 1, len(self.dai)) or not (np.all(r_khe > 0) and np.all(r_khe <= 1)):
+            raise ValueError('dat_du_bao: r_khe phai (len(moc_s) + 1, so canh), 0 < r <= 1')
+        self.r_khe, self.moc_khe = r_khe, list(moc_s)
         self.mh.r_hien_tai = None
         self._cache = {}
         self._alt_bang = {}
@@ -203,9 +234,17 @@ class DinhTuyen:
 
         def bang_luc(t):
             # Gọi mỗi lần nới một cạnh trong A*: tra thẳng bộ nhớ đệm, chỉ gọi _bang khi giờ đó chưa tính.
-            k = (int((t0 + t) // 3600) % 24, dung_ht and t < 1800)
+            k = (int((t0 + t) // 3600) % 24, dung_ht and t < 1800, -1)
             b = nho.get(k)
             return b if b is not None else bang(*k)
+
+        if self.r_khe is not None:
+            moc, tim_khe = self.moc_khe, bisect.bisect_right
+
+            def bang_luc(t):        # noqa: F811 — có dự báo: bảng theo khe thời gian kể từ lúc xuất phát
+                k = (0, False, tim_khe(moc, t))
+                b = nho.get(k)
+                return b if b is not None else bang(*k)
 
         def cp_ngan(i, t):
             if cam[i]:
@@ -254,6 +293,8 @@ class DinhTuyen:
         v_max = max(float(np.max(self.mh.v_trong * self.mh.r_gio[(h0 + k) % 24])) for k in range(3))
         if dung_ht and self.mh.r_hien_tai is not None:
             v_max = max(v_max, float(np.nanmax(self.mh.v_trong * self.mh.r_hien_tai)))
+        if self.r_khe is not None:
+            v_max = max(v_max, float(np.max(self.mh.v_trong * self.r_khe.max(axis=0))))
         return h0, v_max
 
     def tuyen_thay_the(self, diem_di, diem_den, luc, k=3, phuong_an='toi_uu', mua_mm=0.0, trieu_cuong=False,
@@ -331,6 +372,7 @@ class DinhTuyen:
                 self._cham(r, t0, dung_ht, phat)
             kq[ten] = r
         kq['_boi_canh'] = {'luc': str(luc), 'mua_mm': mua_mm, 'trieu_cuong': trieu_cuong, 'dung_so_do_hien_tai': dung_ht,
+                          'du_bao': self.r_khe is not None,
                           'gio_uoc_luong': getattr(self.mh, 'gio_uoc_luong', [])}
         return kq
 
@@ -340,7 +382,7 @@ class DinhTuyen:
         idx = [G[a][b]['i'] for a, b in zip(r['nut'], r['nut'][1:])]
         t, so_ket, so_ngap, so_cam = 0.0, 0, 0, 0
         for i in idx:
-            tg, _, ket = self._bang(int((t0 + t) // 3600) % 24, dung_ht and t < 1800)
+            tg, _, ket = self._bang(*self._khoa(t0, t, dung_ht))
             so_ket += ket[i]
             so_ngap += int(phat[i] > 0)
             so_cam += int(self.mh.cam[i])

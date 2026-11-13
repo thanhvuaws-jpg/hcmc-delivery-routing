@@ -53,19 +53,28 @@ class BangHoc:
         self.cat = int(len(self.khung) * TY_LE_HOC)
         self.het_hoc = self.khung[self.cat - 1]
         self.dau_kiem = self.khung[min(self.cat + KHOANG_HO, len(self.khung) - 1)]
-        self.hoc, self.kiem = d[d['khung'] <= self.het_hoc], d[d['khung'] >= self.dau_kiem]
+        self.kiem = d[d['khung'] >= self.dau_kiem]
+        doan = np.sort(d['doan'].unique())
+        self.fi = np.searchsorted(self.khung, d['khung'].to_numpy())
+        self.ni = np.searchsorted(doan, d['doan'].to_numpy())
+        self.R = np.full((len(self.khung), len(doan)), np.nan, dtype=np.float32)
+        self.R[self.fi, self.ni] = d['r'].to_numpy()
+        self.dat_bo_dau(0.0)
+
+    def dat_bo_dau(self, bo_dau):
+        """Phần học = khung [dau, cat) với dau = bo_dau × cat: bỏ bớt NGÀY CŨ NHẤT (đường cong học,
+        duong_cong_hoc.py). Hồ sơ và tình trạng chung cũng chỉ tính từ phần còn lại. Phần kiểm tra giữ nguyên."""
+        d = self.d
+        self.dau = int(self.cat * bo_dau)
+        self.dau_hoc = self.khung[self.dau]
+        self.hoc = d[(d['khung'] >= self.dau_hoc) & (d['khung'] <= self.het_hoc)]
         bo = {'khung', 'doan', *NHAN.values()}
         # Cột chưa có ít nhất 2 giá trị trong phần học (vd r_tuan_truoc khi chưa đủ tuần) thì bỏ —
         # scikit-learn không chia khoảng được, và cột đó cũng chưa có gì để học.
         self.bo_vi_trong = [c for c in d.columns if c not in bo and self.hoc[c].nunique(dropna=True) < 2]
         self.dac_trung = [c for c in d.columns if c not in bo and c not in self.bo_vi_trong]
-        doan = np.sort(d['doan'].unique())
-        self.fi = np.searchsorted(self.khung, d['khung'].to_numpy())
-        self.ni = np.searchsorted(doan, d['doan'].to_numpy())
-        R = np.full((len(self.khung), len(doan)), np.nan, dtype=np.float32)
-        R[self.fi, self.ni] = d['r'].to_numpy()
-        self.H = ho_so(R, pd.DatetimeIndex(self.khung), self.cat)
-        self.chung = chung_toan_mang(R, self.H)
+        self.H = ho_so(self.R, pd.DatetimeIndex(self.khung), self.cat, self.dau)
+        self.chung = chung_toan_mang(self.R, self.H)
         self.so_o_chung_co = int(np.isfinite(self.chung).sum())
 
     def nhan(self, phan, y_cot):

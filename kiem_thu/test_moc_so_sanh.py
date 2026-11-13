@@ -77,6 +77,19 @@ def test_ho_so_khung_kiem_tra_khong_dong_gop():
     assert np.array_equal(ho_so(R2, khung, cat=cat), H, equal_nan=True)
 
 
+def test_ho_so_bo_ngay_dau():
+    """Đường cong học (dau > 0): khung trước `dau` không đóng góp; khung học từ `dau` vẫn bỏ chính nó."""
+    khung, R, o8 = _chuoi_tuan()
+    cat, dau = int(o8[7]), int(o8[2])           # học ngày 3..7, bỏ ngày 1, 2
+    H = ho_so(R, khung, cat=cat, dau=dau)
+    assert H[o8[8], 0] == pytest.approx(np.mean([0.3, 0.4, 0.5]), abs=1e-5)   # kiểm tra: ngày thường 3, 4, 5
+    assert H[o8[2], 0] == pytest.approx(np.mean([0.4, 0.5]), abs=1e-5)        # ngày 3 bỏ chính nó
+    R2 = R.copy()
+    R2[:dau, 0] = 0.99                                                          # ngày bị bỏ đổi gì cũng vậy
+    assert np.array_equal(ho_so(R2, khung, cat=cat, dau=dau)[dau:], H[dau:], equal_nan=True)
+    assert np.array_equal(ho_so(R, khung, cat=cat, dau=0), ho_so(R, khung, cat=cat), equal_nan=True)
+
+
 def test_ho_so_doan_khong_co_lich_su_la_nan():
     khung, R, o8 = _chuoi_tuan()
     H = ho_so(R, khung, cat=len(khung))
