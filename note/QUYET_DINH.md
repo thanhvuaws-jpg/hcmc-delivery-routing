@@ -1021,3 +1021,276 @@ Shipper hỏi bằng tiếng Việt trong app (và web demo). Một bộ phân l
 
 - Video RAG: không, vì đã bỏ camera (QĐ-004).
 - Tư vấn pháp lý thật: không. Chỉ tra cứu kèm trích dẫn.
+
+## QĐ-031 — Vá điểm yếu định tuyến: tuyến tối ưu trượt ở Chủ nhật và 06:30 (13/11/2026, người dùng: "h làm cái vá điểm iếu ha")
+
+### 1. Chẩn đoán (14 ngày, 12.600 chuyến của QĐ-029)
+
+- Tuyến nhanh nhất C không chậm hơn A ở mọi nhóm: gộp 95,7%, Chủ nhật 93,4%, 06:30 96,0%, thấp nhất 94,3% (19:30).
+- Tuyến tối ưu D: Chủ nhật 79,1%, 06:30 72,7% (gộp 83,8%).
+- Trong các chuyến D chậm hơn A, phần C KHÔNG chậm hơn A: Chủ nhật 75%, 06:30 89%, chung 67–89%.
+  - Vậy D trượt chủ yếu vì các khoản phạt của chính nó: rẽ trái qua trục lớn 30 s, cạnh không đo +30%, đoạn kẹt +50% × mức kẹt. Số đo không sai.
+  - Một nửa số chuyến chậm chỉ chậm dưới 0,5 phút.
+- Giải thích: Chủ nhật và 06:30 đường vắng, tuyến ngắn nhất gần như đã tối ưu. C chỉ hơn A 9,2% (CN) và 10,4% (06:30), so với 13–15% giờ cao điểm. Vì vậy các vòng né của D dễ tốn nhiều hơn phần được lợi.
+  - Lúc 06:30 gần như không kẹt, phạt kẹt ≈ 0, chi phí D bị phạt rẽ trái chi phối. D né rẽ trái nhiều nhất trong ngày: 1,72 lần/chuyến, so với 2,1–2,5 ở giờ khác.
+- Cái D đổi được (phải giữ khi sửa):
+  - rẽ trái qua trục lớn 2,16 so với 3,75 của C (−42%);
+  - kịch bản khắt khe (hẻm chậm hơn ước lượng 30%): D không chậm hơn A 86,1% so với C 85,5%;
+  - phần thời gian chạy trên cạnh có số đo 72% so với 65%.
+
+### 2. Luật thử và cách chọn — ĐĂNG KÝ TRƯỚC khi có kết quả (ghi 13/11 23:06, lúc chạy lại 14 ngày vừa bắt đầu)
+
+Chạy lại `cham_tuyen_that.py` 14 ngày, mã định tuyến KHÔNG đổi, chỉ ghi thêm giờ đến dự kiến `du_doan_D` và `du_doan_A` (tuyến A theo cùng tình trạng lúc đi). Phải ra đúng các cột phút như cũ (tệp cũ cất ở `danh_gia/ket_qua/cu_truoc_qd031/`). Từ đó tính lại offline:
+
+- **R1(δ):** D' = D nếu dự kiến D ≤ (1 + δ) × dự kiến C, ngược lại D' = C. δ ∈ {0; 0,01; 0,02; 0,03; 0,05; 0,08; 0,10; 0,15}. δ = ∞ là D hiện tại.
+- **R2(μ):** D' = D nếu dự kiến D ≤ (1 − μ) × dự kiến A, ngược lại D' = C. μ ∈ {0; 0,02; 0,05}. A qua đường đóng thì dự kiến A = ∞, giữ D.
+- Ý nghĩa: tuyến "tối ưu" chỉ được trả giá bằng thời gian dự kiến ở mức nhỏ, vượt mức đó thì đề xuất tuyến nhanh nhất. Giống Google chỉ đề xuất tuyến tiết kiệm nhiên liệu khi giờ đến gần bằng.
+- **Chọn trên 7 ngày đầu 30/10–05/11** (có T7 31/10, CN 01/11). Lấy biến thể có ÍT rẽ trái nhất mà trên 7 ngày đó:
+  - không chậm hơn A ≥ 80% ở MỌI ngày và mọi khung (giờ × ngày thường / cuối tuần);
+  - nhanh hơn A ≥ 5% mỗi ngày;
+  - khắt khe gộp ≥ 80%.
+  Hòa thì lấy δ / μ cho D' gần D nhất.
+- **Số chính = 7 ngày sau 06/11–12/11** (có T7 07/11, CN 08/11), KHÔNG chỉnh gì thêm. Báo kèm cái giá: rẽ trái, khắt khe, chiều dài, phần trên cạnh có số đo.
+- Không biến thể nào đạt trên 7 ngày đầu → giữ D, ghi điểm yếu vào báo cáo.
+- Nếu chọn được: đưa luật vào `ba_phuong_an` (D và cả E, vì E bắt đầu bằng D và tính lại theo `toi_uu`), rồi chấm lại đầy đủ để có E.
+
+### 3. Kết quả chọn (14/11 00:45–00:50, `danh_gia/thu_gioi_han_toi_uu.py`, log `danh_gia/ket_qua/thu_gioi_han_toi_uu.log`)
+
+- **Tự kiểm đăng ký trước KHÔNG đạt như đã viết**, đã tìm ra lý do:
+  - tuyến A, B trùng hẳn lần chạy cũ (lệch 0 m, 0 lần rẽ trái);
+  - nhưng phút của MỌI chuyến đều lệch: A trung bình +0,036 phút trên 23,4 phút, lớn nhất 1,24.
+  - Nguyên nhân: hồ sơ giờ `r_gio` (`mo_hinh_toc_do.MoHinhTocDo.nap`) được tính lại từ MỌI tệp `bac/tomtom_canh/*.parquet` đang có. Giữa hai lần chạy có thêm trọn ngày 12/11 và 13/11. Mã không có lỗi.
+  - Bằng chứng: độ lệch tăng đều theo phần đường không có số đo (0,012 phút khi dưới 10% → 0,057 khi trên 40%). Các ngày lệch như nhau (0,033–0,038).
+  - Kết luận không đổi: D không chậm hơn A 0,8380 → 0,8381; nhanh hơn 10,40% → 10,38%.
+  - Mọi biến thể đều tính trên CÙNG lần chạy mới, nên so với nhau vẫn công bằng. Lần chạy này cất ở `danh_gia/ket_qua/qd031_khong_luat/`.
+- **Đạt trên 7 ngày chọn:** R1 với δ ≤ 0,05 và R2 với μ ∈ {0; 0,02; 0,05}.
+  - Ít rẽ trái nhất là **R2 μ = 0**: 2,33 lần/chuyến, so với R1 δ = 0,05 là 2,49.
+  - Nghĩa: **tuyến tối ưu dự kiến chậm hơn tuyến ngắn nhất thì đề xuất tuyến nhanh nhất.** Đổi ở khoảng 13% chuyến.
+  - Trên 7 ngày chọn: 91,6% không chậm hơn A, nhanh hơn 10,6%, 7/7 ngày, 20/20 khung.
+- **Số chính: 7 ngày kiểm 06–12/11, không chỉnh gì:**
+
+  | | D cũ | D' = R2 μ=0 |
+  |---|---|---|
+  | không chậm hơn A | 83,7% | **91,2%** |
+  | nhanh hơn A (tổng phút) | 10,5% | 10,9% |
+  | ngày đạt (≥ 80% và ≥ 5%) | 6/7 (CN 08/11: 78,9%) | **7/7** (thấp nhất CN 08/11: 89,3%, nhanh hơn 7,9%) |
+  | khung đạt (≥ 80%) | 14/20 (thấp nhất 06:30 cuối tuần 73,3%) | **20/20** (thấp nhất 10:00 cuối tuần 87,2%) |
+  | 06:30 ngày thường / cuối tuần | 73,8% / 73,3% | 92,2% / 88,9% |
+  | khắt khe không chậm hơn A | 85,8% | 86,3% |
+  | rẽ trái qua trục lớn / chuyến | 2,21 | 2,41 (C: 3,82) |
+  | dài so với A | 1,102 | 1,098 |
+  | phần chiều dài có số đo thật | 71,0% | 69,1% |
+
+  - **Cái giá:**
+    - rẽ trái tăng 0,20 lần/chuyến (+9%), vẫn ít hơn C 37%;
+    - phần có số đo giảm 1,9 điểm.
+    - Khắt khe và chiều dài không xấu đi.
+  - Cả 14 ngày: 91,4%, nhanh hơn 10,7%, 14/14 ngày, 20/20 khung, rẽ trái 2,37.
+  - Không thấy chọn quá khớp: số trên 7 ngày kiểm sát số trên 7 ngày chọn (91,6% → 91,2%). Mỗi bên có 1 thứ Bảy và 1 Chủ nhật.
+- **Giới hạn (tìm thấy khi soát tự kiểm):**
+  - Hồ sơ `r_gio` dùng cho cạnh không đo, cả lúc chấm lẫn lúc C/D lập tuyến, là trung bình MỌI ngày, gồm cả ngày đang chấm.
+  - Ước lượng ảnh hưởng: thêm khoảng 1,5 ngày chỉ làm tỉ lệ "D không chậm hơn" đổi 0,0001. Một ngày trong 15 cũng có trọng số cỡ đó.
+  - Chưa có phép thử trực tiếp (bỏ ngày đang chấm khỏi hồ sơ). Sẽ làm sau khi chạy lại có luật xong (mục 4).
+
+### 4. Đưa luật vào mã và chấm lại đủ 14 ngày (14/11 00:52–03:02, log `danh_gia/ket_qua/chay_qd031_luat_{1,2,3}.log`)
+
+- **Mã:** `dinh_tuyen/ba_phuong_an.py`, hằng `TOI_UU_KHONG_CHAM_HON_NGAN = True`, hàm `DinhTuyen._toi_uu_khong_cham_hon_ngan`.
+  - Khi xin `toi_uu`, `tim()` tìm thêm `ngan_nhat` và `nhanh_nhat` (nếu chưa xin), rồi chấm tuyến ngắn nhất bằng thời gian dự kiến của `nhanh_nhat`.
+  - D dự kiến chậm hơn → trả tuyến nhanh nhất, kèm cờ `doi_sang_nhanh_nhat = True`. Các tuyến tìm thêm bị bỏ khỏi kết quả.
+  - E (tính lại giữa đường) gọi `tim(..., phuong_an=('toi_uu',))` nên tự có luật. `tuyen_thay_the` cũng vậy.
+  - `cham_tuyen_that.py --toi-uu-cu` tắt luật để chạy lại số cũ; cột mới `D_doi_sang_C`.
+- **Tự kiểm 2 ĐẠT** (`thu_gioi_han_toi_uu.py`, phần cuối log):
+  - A, B, C lệch 0 so với lần chạy không luật;
+  - cờ đổi sai kỳ vọng 0/12.136 chuyến;
+  - D lệch lựa chọn offline R2 μ=0 bằng 0 ở phút, phút khắt khe, mét, rẽ trái.
+  - 464 chuyến có A đi qua đường đóng (offline coi A = ∞ nên giữ D): luật trong mã đổi 14 chuyến. Lý do: A trong mã là tuyến ngắn nhất né đường đóng, nên có dự kiến.
+  - Tỉ lệ đổi cả 14 ngày 12,8%.
+- **Kết quả:**
+
+  | | D cũ 7 ngày kiểm | D mới 7 ngày kiểm | D mới 14 ngày | E cũ 7 ngày kiểm | E mới 7 ngày kiểm | E mới 14 ngày |
+  |---|---|---|---|---|---|---|
+  | không chậm hơn A | 83,7% | **91,2%** | 91,4% | 86,6% | **93,7%** | 93,9% |
+  | nhanh hơn A | 10,5% | 10,9% | 10,8% | 11,7% | 12,0% | 11,9% |
+  | ngày đạt | 6/7 | 7/7 | 14/14 | 7/7 | 7/7 | 14/14 |
+  | khung đạt | 14/20 | 20/20 | 20/20 | 17/20 | 20/20 | 20/20 |
+  | rẽ trái / chuyến | 2,21 | 2,42 | 2,38 | — | — | — |
+  | phần dài có số đo | 71,0% | 69,1% | 70,5% | 70,6% | 68,9% | 70,4% |
+
+  - E cũ trượt 3 khung: 06:30 ngày thường 77,3%, 06:30 cuối tuần 74,4%, 07:30 cuối tuần 77,8%. E mới không trượt khung nào.
+  - E đổi tuyến ở 23–27% chuyến như trước, tự kiểm "chuyến không đổi = D" vẫn khớp từng ngày.
+- **Thời gian chạy công cụ chấm:** 1.509–1.640 s/ngày, so với 1.162–1.242 s (≈ +30%, cùng chạy 3 tiến trình song song).
+  - Lý do: mỗi lần lập D, kể cả mỗi lần E tính lại, chạy thêm 2 lần tìm đường.
+  - Ở API, màn hình thường xin cả 3 phương án cùng lúc, nên chỉ tốn thêm một lần chấm tuyến A. Chưa đo trực tiếp thời gian đáp của API.
+- **Phép thử hồ sơ bỏ ngày đang chấm — ĐĂNG KÝ TRƯỚC khi chạy (ghi 14/11 03:05, `danh_gia/kiem_ho_so_bo_ngay.py`):**
+  - Mã: `MoHinhTocDo.nap(bo_ngay=...)`, `DinhTuyen.nap(bo_ngay=...)`, `cham_tuyen_that.py <ngay> --diem=zenodo --ho-so-bo-ngay` → `cham_tuyen_<ngay>_zenodo_hosobongay.csv`.
+    - Hồ sơ `r_gio` và `co_so_do` không dùng tệp ngày đó. Lần chụp mới nhất không đổi, không kéo dữ liệu mới (bạc vẫn tới 13/11 19:39).
+  - Ngày: 01/11 (CN trong 7 ngày chọn), 08/11 (CN yếu nhất 7 ngày kiểm), 11/11 (T4).
+  - So từng ngày với lần chạy có luật ở trên. Mỗi lần so phương án với tuyến A của chính lần đó.
+  - **Đạt:** mỗi ngày |Δ D không chậm hơn A| ≤ 1 điểm, |Δ D nhanh hơn A| ≤ 0,5 điểm, và kết luận ngày (≥ 80% và ≥ 5%) không đổi.
+  - **Không đạt:** chấm lại cả 14 ngày bằng `--ho-so-bo-ngay` và lấy đó làm số chính trong báo cáo.
+  - C, E chỉ báo kèm.
+  - **Kết quả (14/11 04:07–04:35, 3 ngày chạy song song; `ket_qua/kiem_ho_so_bo_ngay.json`): ĐẠT cả 3 ngày.**
+
+    | ngày | D không chậm hơn A | D nhanh hơn A | E không chậm hơn A | tuyến D đổi |
+    |---|---|---|---|---|
+    | 01/11 CN | 88,78 → 88,33% (−0,44 điểm) | 7,42 → 7,44% | 90,67 → 90,67% | 5,4% chuyến |
+    | 08/11 CN | 89,33 → 89,67% (+0,33) | 7,92 → 7,95% | 92,22 → 92,22% | 3,8% |
+    | 11/11 T4 | 92,89 → 93,00% (+0,11) | 10,78 → 10,81% | 95,44 → 95,44% | 3,9% |
+
+    - Độ lệch có cả âm lẫn dương, mức "nhanh hơn" chỉ đổi ≤ 0,03 điểm. Hồ sơ có lẫn ngày đang chấm KHÔNG làm đẹp số định tuyến, nên số chính ở trên giữ nguyên.
+
+### 5. Không áp luật khi đang phạt ngập (tìm khi soát API, 14/11 03:0x)
+
+- **Lỗ hổng:** khi mưa ≥ 1 mm/h hoặc bật triều cường, D cộng phạt vào các cạnh dễ ngập và đi vòng né ngập.
+  - Vòng né thường DỰ KIẾN chậm hơn tuyến ngắn nhất, nên luật sẽ đổi sang tuyến nhanh nhất. Mà tuyến nhanh nhất không né ngập → mất đúng tính năng tuần 7 (`kiem_tra_tuan7.py` mục 3).
+  - 14 ngày chấm không bật mưa (`cham_tuyen_that.py` không truyền `mua_mm`), nên phép chọn và kiểm của luật không thấy được chỗ này.
+- **Sửa:** `tim()` chỉ áp luật khi mảng phạt ngập bằng 0 (`not phat.any()`). Số 14 ngày ở mục 4 không đổi, vì mọi chuyến chấm đều có phạt ngập = 0.
+- Thêm:
+  - API trả `doi_sang_nhanh_nhat` trong mỗi phương án (`dich_vu._gon`);
+  - web ghi "= nhanh nhất" cạnh tên tuyến tối ưu khi luật đổi, để người thử không tưởng hai tuyến trùng là lỗi.
+- Kiểm: chạy lại `dinh_tuyen/kiem_tra_tuan7.py` (thời gian trả 3 tuyến < 2 s, 0 lỗi luật, mưa to thì tối ưu né ngập).
+
+### 6. Kiểm lại tuần 7 và thời gian trả tuyến (14/11 04:36–05:17, log `danh_gia/ket_qua/chuoi_kiem_14_11.log`, `kiem_tra_tuan7_qd031_b.log`)
+
+- **Lần chạy đầu KHÔNG ĐẠT, vì hai lý do, đều đã tìm ra:**
+  - 9/90 cặp không có đường: đích Lăng Cha Cả bám vào nút trên một hẻm có lối vào ĐÓNG ở lần chụp mới nhất (13/11 19:30).
+    - Bỏ đường đóng thì tìm được cả 9. Tắt luật cũng ra đúng 9 cặp đó, nên không phải do luật.
+    - Bài kiểm luôn dùng đường đóng của lần chụp mới nhất, nên dữ liệu mới làm nó vấp.
+    - Chính 9 cặp này làm "chậm nhất 5,3 s": không tới được thì A* duyệt hết đồ thị, khoảng 5,1 s mỗi cặp.
+  - Kiểm Bellman (tính lại giữa đường) 15/20: cả 5 lần lệch đều là chuyến bị luật đổi sang tuyến nhanh nhất. Tắt luật thì 20/20.
+    - Luật cố ý không tối ưu chi phí, nên phần kiểm thuật toán phải tắt luật.
+- **Sửa bài kiểm:**
+  - cặp không có đường mà bỏ đường đóng thì tìm được → báo riêng, không tính lỗi;
+  - thời gian chỉ tính cặp có đường;
+  - phần Bellman tắt luật.
+- **Chạy lại: ĐẠT.**
+  - Cặp có đường chậm nhất 0,77 / 0,78 s.
+  - 0 lỗi luật, 0 lần vào đường đóng.
+  - Mưa to né ngập 14/14 (đúng chỗ cần kiểm sau mục 5).
+  - ALT 20/20; tuyến thay thế 0 vi phạm, chậm nhất 1,08 s; Bellman 20/20.
+- **Thời gian trả tuyến bật / tắt luật** (90 cặp, máy rảnh):
+
+  | | 08:00 tắt | 08:00 bật | 17:00 tắt | 17:00 bật |
+  |---|---|---|---|---|
+  | xin cả 3 phương án (như API `/tuyen`), TB | 0,73 s | 0,76 s | 0,79 s | 0,81 s |
+  | chỉ xin tối ưu (như tính lại giữa đường), TB | 0,31 s | 0,75 s | 0,32 s | 0,81 s |
+
+  - Luật đổi tuyến ở 8/90 cặp, cả hai giờ.
+  - Chỉ xin tối ưu thì chậm gấp khoảng 2,4 lần, vì tìm thêm ngắn nhất và nhanh nhất. Vẫn dưới 1 s trung bình.
+- **Việc cho phần app:** bám điểm vào nút TỚI ĐƯỢC (hoặc báo sớm "đích bị đường đóng bao kín") thay vì để A* chạy 5 s rồi trả "không có đường".
+
+## QĐ-032 — Vá điểm yếu dự báo 60 phút: GBM gần như chỉ bằng hồ sơ (14/11/2026)
+
+### 1. Vấn đề (từ QĐ-028 mục 1)
+
+- Ở 60 phút, GBM + hồ sơ chỉ thấp hơn hồ sơ ngày thường / cuối tuần 3,5% (6,29 so với 6,52). Ở ngày thường 09–12/11 thì ngang hẳn.
+- Tiêu chí ≥ 10% hiện đạt là nhờ so với mốc "lịch sử theo thứ", vốn còn yếu vì mỗi thứ mới có 1–2 ngày. Khi có 2–3 tháng dữ liệu, mốc đó mạnh lên và tiêu chí 60 phút có thể trượt.
+- Hai chỗ trong cách học có thể đang làm thiệt ở tầm xa (`moc_so_sanh.tao_gbm_chung`):
+  - **Đích học là y − r** (đổi so với hiện tại): khi không chắc, cây co về "giữ nguyên". Ở 60 phút, co về hồ sơ giờ đích mới hợp lý hơn: giữ nguyên MAE 9,64, còn hồ sơ 6,52.
+  - **Hàm mất mát bình phương** trong khi thước đo là MAE: r có đuôi lệch (kẹt), nên trung bình và trung vị khác nhau.
+
+### 2. Phép thử và cách chọn — ĐĂNG KÝ TRƯỚC khi chạy (ghi 14/11 00:57, `mo_hinh/thu_dich_mat_mat.py`)
+
+- 4 biến thể của GBM + hồ sơ, cùng đặc trưng và tham số, chỉ đổi hai thứ trên:
+  - V0: bình phương, học y − r (như hiện tại);
+  - V1: tuyệt đối, học y − r;
+  - V2: bình phương, học y − H(giờ đích);
+  - V3: tuyệt đối, học y − H(giờ đích).
+  - Ô chưa có hồ sơ ở giờ đích thì lấy r làm gốc.
+- **Chọn chỉ trong phần học:**
+  - học tới 05/11 16:15, có hồ sơ và tình trạng chung cũng chỉ tính tới đó;
+  - kiểm định từ 05/11 17:30 tới khi nhãn còn ≤ 08/11 16:15 (có T6, T7, CN);
+  - mỗi tầm (15 / 30 / 60) lấy biến thể có MAE kiểm định thấp nhất. Không thấp hơn V0 ít nhất 1% thì giữ V0.
+- **Chấm MỘT lần** trên tập kiểm tra của lần train chính: học tới 08/11 16:15, ô có nhãn ≤ 12/11 22:30.
+  - Tự kiểm: V0 phải ra đúng số sau khi sửa sự cố, 5,475 / 6,167 / 6,292.
+  - Báo kèm: so với lịch sử theo thứ, so với hồ sơ, MAE từng ngày, F1 kẹt.
+- Biến thể được chọn mà không hơn V0 trên tập kiểm tra thì vẫn ghi số thật, không chọn lại.
+- Áp dụng vào `du_bao_moi.py` / API: chỉ làm khi hơn V0 trên tập kiểm tra ở tầm nào đó. Học sâu thì để lần train cuối.
+
+### 3. Kết quả (14/11 03:03–04:07, log `mo_hinh/ket_qua/thu_dich_mat_mat.log`, `thu_dich_mat_mat_2026-11-14_0407.json`)
+
+- **Bước chọn** (MAE kiểm định 05/11 17:30 → 08/11 16:15, khoảng 2 triệu ô mỗi tầm):
+
+  | tầm | V0 | V1 tuyệt đối, y − r | V2 bình phương, y − H | V3 tuyệt đối, y − H | chọn |
+  |---|---|---|---|---|---|
+  | 15 | 5,739 | **5,590** | 5,717 | 5,752 | V1 (−2,6%) |
+  | 30 | 6,621 | **6,540** | 6,633 | 6,568 | V1 (−1,2%) |
+  | 60 | 7,198 | 7,383 | 7,110 | **6,908** | V3 (−4,0%) |
+
+  - Ở 60 phút, chỉ đổi mất mát (V1) thì KÉM hơn. Đổi cả mất mát lẫn gốc về hồ sơ (V3) mới tốt.
+- **Bước chấm** (một lần, tập kiểm tra lần train chính, khoảng 2,87–2,89 triệu ô mỗi tầm):
+  - Tự kiểm ĐẠT: V0 ra đúng 5,475 / 6,167 / 6,292, lệch 0,000.
+
+  | tầm | V0 (cũ) | biến thể chọn | so lịch sử theo thứ | so hồ sơ ngày thường / cuối tuần | F1 kẹt |
+  |---|---|---|---|---|---|
+  | 15 | 5,475 | **5,323** (−2,8%) | 29,5 → **31,5%** | 16,7 → **19,0%** | 0,641 → 0,649 |
+  | 30 | 6,167 | **5,954** (−3,5%) | 20,6 → **23,3%** | 5,9 → **9,2%** | 0,592 → 0,598 |
+  | 60 | 6,292 | **6,047** (−3,9%) | 18,9 → **22,0%** | 3,5 → **7,3%** | 0,577 → 0,591 (hồ sơ 0,594) |
+
+  - Thấp hơn V0 ở MỌI ngày của tập kiểm tra (08–12/11), ở cả 3 tầm. Ví dụ 60 phút: 7,27 → 7,03; 6,21 → 5,94; 6,14 → 5,89; 6,15 → 5,90; 6,41 → 6,21.
+  - **Điểm yếu #2 đỡ đi nhưng chưa hết:** khoảng cách so với hồ sơ ở 60 phút tăng gấp đôi (3,5% → 7,3%), vẫn dưới 10%. F1 kẹt 60 phút vẫn thấp hơn hồ sơ một chút (0,591 so với 0,594).
+  - Học sâu (`hoc_sau_hcm.py`) vốn đã học bằng MAE (`mae_co_nhan`). Trước đây GBM học bình phương nên so chưa cân.
+    - Nay cùng loại mất mát, GBM 5,32 / 5,95 / 6,05; Graph WaveNet che sự cố 5,79 / 6,25 / 6,30 (QĐ-029 mục 5). Kết luận "GBM tốt nhất về MAE" mạnh hơn.
+- **Áp dụng** (đúng điều kiện đăng ký: hơn V0 trên tập kiểm tra):
+  - `du_bao_moi.py` dùng cấu hình mới: `CAU_HINH`, mô hình `gbm_ls_qd032_hoc_toi_*.joblib`.
+  - Tự kiểm mới: MAE tập kiểm tra phải ra 5,323 / 5,954 / 6,047.
+  - `--cu` chạy lại bản cũ, ra `du_bao_gbm_v0_*.parquet` (khác tiền tố để API và chấm tuyến không đọc nhầm).
+  - Đã chạy 04:51 → 05:04: tự kiểm ra đúng 5,323 / 5,954 / 6,047, ra `du_bao_gbm_ls_2026-11-13.parquet`.
+    - Tệp V0 cũ đổi tên thành `du_bao_gbm_v0_2026-11-13.parquet`.
+  - **Thêm bằng chứng ngoài mẫu:** khoảng 600 nghìn ô có nhãn SAU tập kiểm tra (12/11 22:30 → 13/11 19:15), bước chọn chưa hề thấy. V0 → mới: 5,330 → 5,185 (−2,7%); 6,039 → 5,792 (−4,1%); 6,164 → 5,888 (−4,5%).
+- **Chưa làm lại:**
+  - các số đã báo dùng dự báo V0: chấm tuyến theo dự báo F/G/H (QĐ-027), lập tuyến trước 30 phút (QĐ-028), hiệu chỉnh giờ đến (QĐ-029 mục 1);
+  - `moc_so_sanh.py`, `duong_cong_hoc.py`, `ablation.py` vẫn bình phương (để số cũ lặp lại được).
+  - Lần train cuối dùng cấu hình mới từ đầu.
+
+## QĐ-033 — Kiểm tay 30 đoạn ghép TomTom → cạnh (việc tồn tuần 3, điểm yếu #3) (14/11/2026)
+
+### 1. Cách kiểm — ĐĂNG KÝ TRƯỚC khi bốc mẫu (ghi 14/11 03:11, `danh_gia/kiem_tay_ghep.py`)
+
+- **Mẫu:**
+  - lần chụp thô `du_lieu/tomtom/tho/2026-11-10/1956.parquet` (T3, 19:56, giờ cao điểm tối);
+  - xếp ngẫu nhiên mọi đoạn có mức (numpy `default_rng(20261114)`), lấy 30 đoạn đầu tiên có ít nhất 1 mẫu ghép được;
+  - đoạn không ghép được mẫu nào thì đếm riêng (ngoài vùng đồ thị hay bỏ sót) và không thay.
+- **Mỗi đoạn có một hình:**
+  - đường TomTom có mũi tên chiều vẽ, ghi "hai chiều" nếu `phu = full`;
+  - cạnh được ghép, có tên OSM và loại đường;
+  - mẫu không ghép được;
+  - mọi cạnh khác trong vòng 60 m (xám);
+  - kèm liên kết OpenStreetMap tại chỗ đó.
+- **Đúng khi:** ≥ 90% số mẫu đã ghép rơi vào cạnh nằm trên ĐÚNG con đường TomTom vẽ, và đúng chiều với đoạn một phía.
+  - Sai là: sang đường song song, sang hẻm, sang nhánh rẽ, cầu vượt khác tầng, hoặc ngược chiều.
+  - Phần không ghép được ghi riêng: đó là thiếu dữ liệu, không phải dữ liệu đặt sai chỗ.
+- **Đạt:** ≥ 28/30 đúng (tiêu chí tuần 3, `KE_HOACH.md`).
+- **Người kiểm:** Claude xem hình từng đoạn, chỗ khó thì xem thêm bản đồ OSM. Ghi lý do cho từng đoạn. Trang hình để người dùng xem lại; người dùng chưa xác nhận thì báo cáo ghi "Claude kiểm".
+
+### 2. Kết quả (14/11 03:12–03:21, `danh_gia/kiem_tay_ghep.py`, hình `danh_gia/ket_qua/kiem_tay_ghep/doan_XX.png`, không lên git)
+
+- Bốc mẫu: 30 đoạn đầu tiên theo thứ tự ngẫu nhiên đều ghép được, không đoạn nào bị bỏ. Cả 30 đoạn ghép được 100% số mẫu.
+- **28/30 đúng → ĐẠT, vừa đúng ngưỡng.**
+  - 26 đoạn rõ ràng đúng (#01–07, #09–24, #26, #29, #30): đường TomTom nằm trên đúng các cạnh được nhận, đúng chiều với đoạn một phía.
+    - Đoạn đi qua nút giao có đổi tên đường vẫn là một mạch liền: #24 Nguyễn Văn Trỗi → Phan Đình Giót.
+    - #26: 1/73 mẫu rơi vào nhánh rẽ.
+    - #18: đúng cung vòng xoay, đúng chiều ngược kim đồng hồ.
+  - 2 đoạn khó, tính đúng nhờ thẻ OSM và nối mạch (bản đồ nền OSM không mở được: trình duyệt bị chặn vào openstreetmap.org):
+    - **#08 cầu Bình Lợi** (TomTom "Minor local road"):
+      - đường TomTom cách nhánh cầu được nhận (primary, layer 1, 2 làn) 1–2,6 m, cách cầu chính (trunk) 13 m, nên hợp với nhánh cầu phụ hơn;
+      - 9/72 mẫu cuối xuống đường song hành Phạm Văn Đồng, đúng chỗ đường TomTom dạt sang.
+    - **#25 cầu vượt Hoàng Hoa Thám** (TomTom "Major road"):
+      - đường TomTom cách mạch chính Cộng Hòa → cầu vượt 1,6–3,9 m (hai way này nối nhau);
+      - đường dưới đất cùng chiều cách 5–8 m và không nối vào cầu.
+    - Nếu cả hai thật ra sai thì còn 26/30.
+  - **2 đoạn sai:**
+    - **#27 Ngã năm Thái Bình** (26 m, 3 mẫu): đường gần nhất là Phạm Ngũ Lão, cách 0,8 m, nhưng bị loại vì lệch hướng 44° (> 35°). Mẫu rơi vào đường nhánh và vòng xoay cách 6–10 m.
+    - **#28 cầu vượt Cây Gõ** (600 m): cầu (layer 1) và Hồng Bàng dưới đất cùng chiều, cách đường TomTom chỉ chênh nhau 1–2 m. 45 mẫu lên cầu, 15 mẫu xuống đất, không biết TomTom muốn tầng nào.
+- **Cỡ của hai chỗ yếu trên CẢ lần chụp** (152.711 mẫu ghép được, `pham_vi`):
+  - (a) đoạn `phu = full` trên đường hai chiều chỉ gắn vào một chiều (khi bằng điểm, bộ ghép lấy cạnh có chỉ số nhỏ hơn). Chiều ngược không nhận mẫu nào: 1.680 mẫu, 1,1%. Đây là thiếu dữ liệu, không phải đặt sai chỗ.
+  - (b) mẫu trên cầu / cầu vượt: 9.644 (6,3%). Trong đó 1.187 mẫu (0,78% tổng) có cạnh không phải cầu, cùng hướng, xa hơn không quá 3 m, tức dễ nhầm tầng như #28.
+  - Lỗi kiểu #27 (nút giao rối, cạnh đúng bị loại vì góc) chưa đo được cỡ.
+- **Không sửa bộ ghép lúc này:**
+  - phạm vi nhỏ: (a) + (b) dưới 2% số mẫu;
+  - sửa thì phải ghép lại tầng bạc của mọi ngày, dựng lại tầng vàng và train lại, mà số chính vừa chốt 12–13/11.
+  - Để cho lần train cuối (2–3 tháng dữ liệu):
+    - ghép theo mạch (mẫu liền nhau phải đi trên các cạnh nối nhau, kiểu HMM map matching), sửa được cả #27 lẫn #28;
+    - `full` trên đường hai chiều thì gán cả cạnh ngược;
+    - chỗ có cầu: ưu tiên tầng theo hạng đường TomTom.
+- Báo cáo ghi: "Claude kiểm bằng mắt, 28/30, trong đó 2 đoạn khó". Người dùng xem lại 4 hình #08, #25, #27, #28 nếu muốn xác nhận.

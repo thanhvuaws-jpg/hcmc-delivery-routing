@@ -4,6 +4,39 @@ Mục mới nhất ở trên cùng.
 
 > 30/10/2026 11:53: các mục trong ngày từng ghi giờ ước chừng (13:00, 14:30…) — SAI, đồng hồ thật khi đó chưa tới 12:00. Đã sửa: chỉ ghi giờ có bằng chứng (giờ tệp, lệnh `date`, giờ trên AWS).
 
+## 13/11/2026 23:05 → 14/11/2026 03:2x — vá điểm yếu: tuyến tối ưu trượt CN / 06:30 (QĐ-031), dự báo 60 phút (QĐ-032), kiểm tay ghép (QĐ-033)
+
+- Người dùng: "h làm cái vá điểm iếu ha". Ba điểm yếu: (1) D trượt Chủ nhật và 06:30, (2) GBM 60 phút chỉ hơn hồ sơ 3,5%, (3) kiểm tay 30 đoạn ghép.
+- **(1) QĐ-031, xong:**
+  - Chẩn đoán: D trượt vì các khoản phạt của chính nó (rẽ trái 30 s, cạnh không đo, kẹt), không phải vì số đo sai.
+  - Đăng ký trước 2 họ luật. Chọn trên 30/10–05/11, kiểm trên 06–12/11 → **R2 μ=0**: D dự kiến chậm hơn tuyến ngắn nhất thì trả tuyến nhanh nhất.
+  - Đưa vào `ba_phuong_an.py`, chấm lại 14 ngày (00:52 → 03:02, 3 tiến trình song song). Tự kiểm khớp offline lệch 0.
+  - 7 ngày kiểm: D không chậm hơn A 83,7% → **91,2%**, ngày 6/7 → 7/7, khung 14/20 → 20/20. E 86,6% → 93,7%, khung 17/20 → 20/20.
+  - Cái giá: rẽ trái 2,21 → 2,42 lần/chuyến (C 3,82); phần có số đo 71,0 → 69,1%.
+- **Tự kiểm đầu tiên lệch** (phút mọi chuyến +0,036): hồ sơ `r_gio` được tính lại từ mọi ngày bạc, giữa hai lần chạy có thêm 12–13/11. Không phải lỗi mã. Đã ghi bẫy vào CAN_NHO.
+  - Từ đó thấy hồ sơ gồm cả ngày đang chấm. Đã thêm `bo_ngay` (`MoHinhTocDo.nap`, `DinhTuyen.nap`, `cham_tuyen_that.py --ho-so-bo-ngay`) và đăng ký trước phép thử 3 ngày (QĐ-031 mục 4).
+  - Phép thử chạy 04:07 → 04:35: **ĐẠT** cả 01/11, 08/11, 11/11. D lệch −0,44 / +0,33 / +0,11 điểm, nhanh hơn lệch ≤ 0,03 điểm, nên số chính giữ nguyên.
+- **Soát API, tìm thêm lỗ hổng (QĐ-031 mục 5):** lúc mưa / triều cường, D đi vòng né ngập nên dự kiến chậm hơn A, và luật sẽ đổi sang C, vốn không né ngập. Đã sửa: chỉ áp luật khi không có phạt ngập.
+  - API trả thêm `doi_sang_nhanh_nhat`; web ghi "= nhanh nhất" cạnh tên tuyến tối ưu.
+  - `kiem_tra_tuan7.py` lần đầu KHÔNG ĐẠT: 9 cặp đích Lăng Cha Cả bị đường đóng (13/11) bao kín, kéo thời gian lên 5,3 s; Bellman 15/20 do luật. Đã sửa bài kiểm, chạy lại 05:1x thì **ĐẠT** (chậm nhất 0,78 s, né ngập 14/14, Bellman 20/20). QĐ-031 mục 6.
+  - Thời gian: xin cả 3 tuyến thì luật thêm khoảng 4% (0,73 → 0,76 s TB); chỉ xin tối ưu thì gấp khoảng 2,4 lần (0,31 → 0,75 s).
+- **(3) QĐ-033, xong:** kiểm tay 30 đoạn ghép TomTom (`danh_gia/kiem_tay_ghep.py`, đăng ký trước 03:11) → **28/30 đúng, đạt đúng ngưỡng**.
+  - 2 sai: #27 Ngã năm Thái Bình, #28 cầu vượt Cây Gõ. 2 đoạn khó tính đúng: #08, #25.
+  - Phạm vi cả lần chụp: "full" chỉ gắn một chiều 1,1% mẫu; dễ nhầm tầng ở cầu 0,78%. Để lần train cuối (ghép theo mạch).
+  - Không mở được openstreetmap.org trong trình duyệt (bị chặn), nên kiểm bằng thẻ OSM gốc.
+- **(2) QĐ-032, xong:** đăng ký trước 4 biến thể (đích y − r / y − hồ sơ × mất mát bình phương / tuyệt đối), chọn trong phần học rồi chấm một lần. `mo_hinh/thu_dich_mat_mat.py` chạy 03:03 → 04:07.
+  - Chọn: 15 / 30 phút mất mát tuyệt đối; 60 phút mất mát tuyệt đối + học y − hồ sơ. Tự kiểm V0 lệch 0,000.
+  - MAE 5,475 / 6,167 / 6,292 → **5,323 / 5,954 / 6,047**, tốt hơn ở mọi ngày. So hồ sơ 60 phút 3,5% → 7,3%.
+  - Đưa vào `du_bao_moi.py` (`CAU_HINH`, `--cu` cho bản cũ). Chạy 04:51 → 05:04, tự kiểm khớp; tệp V0 cũ đổi tên `du_bao_gbm_v0_2026-11-13.parquet`.
+  - Ngoài mẫu (khoảng 600 nghìn ô sau tập kiểm tra, chủ yếu 13/11): −2,7 / −4,1 / −4,5%. Chưa chạy lại số định tuyến theo dự báo.
+- Tệp:
+  - `dinh_tuyen/ba_phuong_an.py`, `dinh_tuyen/mo_hinh_toc_do.py`;
+  - `danh_gia/cham_tuyen_that.py`, `danh_gia/thu_gioi_han_toi_uu.py` (mới), `danh_gia/kiem_ho_so_bo_ngay.py` (mới);
+  - `mo_hinh/thu_dich_mat_mat.py` (mới), `danh_gia/kiem_tay_ghep.py` (mới), `he_thong/api/dich_vu.py`, `he_thong/web/index.html`.
+  - Bản sao kết quả cũ (gitignore): `danh_gia/ket_qua/cu_truoc_qd031/`, `danh_gia/ket_qua/qd031_khong_luat/`.
+- Còn dở:
+  - đo MAE thật dự báo "bây giờ" 13/11 18:45–19:30 khi kéo dữ liệu mới. KHÔNG kéo dữ liệu lúc đang chạy so sánh, vì hồ sơ sẽ đổi.
+
 ## 13/11/2026 (20:0x → 22:0x) — sửa rò rỉ sự cố (số không đổi); sửa lỗi khung cuối của dự báo "bây giờ" (QĐ-029 mục 5, 6)
 
 - Sửa rò rỉ: `bac_su_co.py` thêm `hinh_ma`, ra `su_co_hinh.parquet`; `vang.py` gán theo hình của từng lần ghi; dựng lại 20:05 → 20:12 (302/302, pytest 67/67).

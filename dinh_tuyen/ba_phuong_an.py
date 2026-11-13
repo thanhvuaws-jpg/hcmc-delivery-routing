@@ -8,6 +8,9 @@
                 mức kẹt = max(0, 0,75 − r) / 0,75   (đoạn càng kẹt càng khó đoán giờ tới -> né bớt)
                 mưa ≥ 5 mm/h: +PHAT_NGAP_S['to'] giây mỗi cạnh dễ ngập do mưa (D8, bac/ngap_canh.parquet);
                 1–5 mm/h: +PHAT_NGAP_S['vua']; triều cường (bật tay): cạnh dễ ngập do triều cũng bị phạt.
+              QĐ-031: tuyến tìm được mà DỰ KIẾN chậm hơn tuyến ngắn nhất (cùng hiểu biết) thì trả tuyến
+              nhanh_nhat (cờ doi_sang_nhanh_nhat); không áp khi đang phạt ngập (mưa ≥ 1 mm/h, triều cường).
+              Tắt: TOI_UU_KHONG_CHAM_HON_NGAN = False.
 Dự báo (QĐ-027, dat_du_bao): r của mỗi cạnh theo THỜI GIAN KỂ TỪ LÚC XUẤT PHÁT (khe 15 phút) thay cho
   "giữ nguyên tình trạng lúc đi" — thời gian và phạt kẹt đều theo r dự báo ở khe xe tới cạnh.
 Cả 3 đều CẤM cạnh đang đóng hẳn và tôn trọng một chiều / cấm rẽ / cấm xe máy (tim_duong.BanDo).
@@ -39,6 +42,11 @@ PHAT_NGAP_S = {'to': 600.0, 'vua': 180.0}
 # Phương án tối ưu: mỗi lần rẽ TRÁI tại nút giao có trục lớn (tim_duong.la_re_trai_lon) cộng 30 s vào chi phí
 # (không vào giờ tới dự kiến) — QĐ-016.
 PHAT_RE_TRAI_S = 30.0
+# QĐ-031: tuyến tối ưu (né kẹt, né cạnh không đo, phạt rẽ trái) có lúc DỰ KIẾN chậm hơn cả tuyến ngắn nhất — Chủ nhật
+# và 06:30 đường thoáng, né hết mà chẳng được gì: chỉ 72–79% chuyến không chậm hơn tuyến ngắn nhất. Khi đó trả tuyến
+# nhanh nhất (luôn dự kiến ≤ tuyến ngắn nhất). Chọn luật trên 30/10–05/11, kiểm trên 06–12/11 không chỉnh gì.
+# False: tối ưu như trước 14/11 (để chạy lại số cũ).
+TOI_UU_KHONG_CHAM_HON_NGAN = True
 # Tuyến thay thế (QĐ-016): phạt lặp ×1,5 cạnh đã dùng; nhận khi chi phí ≤ 1,25 × tốt nhất và trùng ≤ 70% chiều dài
 # (giới hạn kéo dãn 25% như Abraham và cs. 2010; trùng chặt hơn mức 80% của họ để tuyến khác nhau thấy rõ).
 PHAT_LAP, GIAN_TOI_DA, TRUNG_TOI_DA = 1.5, 1.25, 0.7
@@ -55,7 +63,8 @@ class DinhTuyen:
         self._dai_list = self.dai.tolist()
         self._dau_cuoi = list(bd.G.edges())          # chỉ số cạnh -> (nút đầu, nút cuối)
         self.phat_re_trai_s = PHAT_RE_TRAI_S
-        self.r_khe = self.moc_khe = None               # dự báo theo khe thời gian (dat_du_bao)
+        self.toi_uu_khong_cham_hon_ngan = TOI_UU_KHONG_CHAM_HON_NGAN
+        self.r_khe = self.moc_khe = None              # dự báo theo khe thời gian (dat_du_bao)
         self._dung_alt()
 
     def _dung_alt(self, so_moc=8):
@@ -129,10 +138,11 @@ class DinhTuyen:
         return can_duoi
 
     @classmethod
-    def nap(cls, luc=None, tep_ho_so=None):
-        """tep_ho_so: tệp của MoHinhTocDo.luu — bỏ qua việc tính hồ sơ từ toàn bộ tầng bạc (API, VPS)."""
+    def nap(cls, luc=None, tep_ho_so=None, bo_ngay=None):
+        """tep_ho_so: tệp của MoHinhTocDo.luu — bỏ qua việc tính hồ sơ từ toàn bộ tầng bạc (API, VPS).
+        bo_ngay: hồ sơ không dùng tệp ngày đó (xem MoHinhTocDo.nap)."""
         bd = BanDo.nap()
-        mh = MoHinhTocDo.doc(tep_ho_so) if tep_ho_so else MoHinhTocDo.nap(luc)
+        mh = MoHinhTocDo.doc(tep_ho_so) if tep_ho_so else MoHinhTocDo.nap(luc, bo_ngay=bo_ngay)
         n = bd.G.number_of_edges()
         ngap_mua, ngap_trieu = np.zeros(n, dtype=bool), np.zeros(n, dtype=bool)
         tep = os.path.join(GOC, 'du_lieu', 'bac', 'ngap_canh.parquet')
@@ -310,6 +320,11 @@ class DinhTuyen:
         Tốn ~1 s trung bình, tới ~4 s cặp xa giờ cao điểm (mỗi lượt sau khi phạt xét nhiều trạng thái hơn):
         API nên trả 3 phương án trước, tuyến thay thế gọi riêng.
         """
+        if tuyen_dau is None and phuong_an == 'toi_uu' and self.toi_uu_khong_cham_hon_ngan:
+            # Tuyến đầu phải trùng tim() — kể cả khi luật QĐ-031 đổi sang tuyến nhanh nhất.
+            tuyen_dau = self.tim(diem_di, diem_den, luc, mua_mm, trieu_cuong, phuong_an=('toi_uu',))['toi_uu']
+            if tuyen_dau is None:
+                return []
         t0, dung_ht, phat = self._boi_canh(luc, mua_mm, trieu_cuong)
         cp = self._ham_chi_phi(t0, dung_ht, phat)[phuong_an]
         h0, v_max = self._v_max(t0, dung_ht)
@@ -356,14 +371,20 @@ class DinhTuyen:
             phuong_an=('ngan_nhat', 'nhanh_nhat', 'toi_uu'), di_tu=None):
         """dung_alt=False: bỏ cận ALT (chỉ dùng cận khoảng cách) — để kiểm ALT không làm đổi kết quả.
         phuong_an: chỉ tính những phương án cần (đỡ thời gian khi chấm hàng loạt).
-        di_tu: (nút trước, nút hiện tại) — tính lại tuyến cho xe đang chạy (tim_duong.BanDo.tim), luc = bây giờ."""
+        di_tu: (nút trước, nút hiện tại) — tính lại tuyến cho xe đang chạy (tim_duong.BanDo.tim), luc = bây giờ.
+        Có 'toi_uu' (và toi_uu_khong_cham_hon_ngan): tính thêm ngắn nhất + nhanh nhất để áp luật QĐ-031, nhưng chỉ
+        trả các phương án đã hỏi."""
         t0, dung_ht, phat = self._boi_canh(luc, mua_mm, trieu_cuong)
         ham = self._ham_chi_phi(t0, dung_ht, phat)
         h0, v_max = self._v_max(t0, dung_ht)
+        # Luật QĐ-031 chỉ áp khi KHÔNG có phạt ngập (QĐ-031 mục 5): lúc mưa / triều cường, D đi vòng né ngập nên dự
+        # kiến chậm hơn tuyến ngắn nhất là đương nhiên, còn tuyến nhanh nhất không né ngập.
+        ap_luat = 'toi_uu' in phuong_an and self.toi_uu_khong_cham_hon_ngan and not phat.any()
+        can = set(phuong_an) | ({'ngan_nhat', 'nhanh_nhat'} if ap_luat else set())
         kq = {}
         # Phương án ngắn nhất: chi phí là MÉT -> ước lượng A* = khoảng cách (v_max_kmh = 3,6 nghĩa là 1 m/s).
         for ten, v_max in (('ngan_nhat', 3.6), ('nhanh_nhat', v_max), ('toi_uu', v_max)):
-            if ten not in phuong_an:
+            if ten not in can:
                 continue
             alt = self._can_duoi_luc(h0, dung_ht, ten) if dung_alt and ten != 'ngan_nhat' else None
             r = self.bd.tim(diem_di, diem_den, chi_phi=ham[ten], v_max_kmh=v_max, uoc_luong_them=alt,
@@ -371,10 +392,37 @@ class DinhTuyen:
             if r is not None:
                 self._cham(r, t0, dung_ht, phat)
             kq[ten] = r
+        if ap_luat:
+            self._toi_uu_khong_cham_hon_ngan(kq, luc, mua_mm, trieu_cuong, di_tu)
+            for ten in can - set(phuong_an):
+                del kq[ten]
+        elif kq.get('toi_uu') is not None:
+            kq['toi_uu']['doi_sang_nhanh_nhat'] = False
         kq['_boi_canh'] = {'luc': str(luc), 'mua_mm': mua_mm, 'trieu_cuong': trieu_cuong, 'dung_so_do_hien_tai': dung_ht,
                           'du_bao': self.r_khe is not None,
                           'gio_uoc_luong': getattr(self.mh, 'gio_uoc_luong', [])}
         return kq
+
+    def _toi_uu_khong_cham_hon_ngan(self, kq, luc, mua_mm, trieu_cuong, di_tu):
+        """
+        Luật QĐ-031 (R2, μ = 0): giờ đến DỰ KIẾN của tuyến tối ưu > của tuyến ngắn nhất (cùng tình trạng đang biết,
+        cùng thước đo giây của phương án nhanh nhất) -> thay bằng tuyến nhanh nhất, chi_phi tính lại theo thước đo
+        tối ưu (để phần tính lại giữa đường so được với tuyến cũ). Đánh dấu toi_uu['doi_sang_nhanh_nhat'].
+        """
+        d, a, c = kq.get('toi_uu'), kq.get('ngan_nhat'), kq.get('nhanh_nhat')
+        if d is None:
+            return
+        d['doi_sang_nhanh_nhat'] = False
+        if a is None or c is None:
+            return
+        du_a = self.chi_phi_tuyen(a['canh'], luc, 'nhanh_nhat', mua_mm, trieu_cuong, di_tu)
+        if du_a is None or d['tg_du_kien_s'] <= du_a[1]:
+            return
+        moi = dict(c, doi_sang_nhanh_nhat=True)
+        cp = self.chi_phi_tuyen(c['canh'], luc, 'toi_uu', mua_mm, trieu_cuong, di_tu)
+        if cp is not None:
+            moi['chi_phi'] = round(cp[0], 1)
+        kq['toi_uu'] = moi
 
     def _cham(self, r, t0, dung_ht, phat):
         """Chấm lại tuyến bằng CÙNG thước đo thời gian; đếm cạnh kẹt / dễ ngập / đóng."""

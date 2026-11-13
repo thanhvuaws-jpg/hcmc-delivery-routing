@@ -288,6 +288,12 @@ function veBang(kq) {
     cham.className = 'cham';
     cham.style.background = MAU[p];
     ten.append(cham, TEN[p]);
+    if (r && r.doi_sang_nhanh_nhat) {
+      const ghi = document.createElement('small');
+      ghi.textContent = ' = nhanh nhất';
+      ghi.title = 'Lúc này né kẹt / rẽ trái không lợi hơn tuyến ngắn nhất, nên tuyến tối ưu lấy tuyến nhanh nhất (QĐ-031).';
+      ten.append(ghi);
+    }
     tr.append(ten);
     if (!r) { const td = o('không có đường'); td.colSpan = 6; tr.append(td); than.append(tr); continue; }
     tr.append(o((r.dai_m / 1000).toFixed(1)), o(r.phut.toFixed(1) + "'"));

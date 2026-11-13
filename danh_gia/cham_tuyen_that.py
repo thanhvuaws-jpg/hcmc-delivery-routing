@@ -134,10 +134,14 @@ def main():
     nguong = next((float(a.split('=', 1)[1]) for a in sys.argv if a.startswith('--nguong=')), NGUONG_DOI_S)
     t_bat_dau = time.time()
     khung, R, DONG, PD = nap_quan_sat(ngay)
-    d = DinhTuyen.nap(None)
+    # --ho-so-bo-ngay: hồ sơ giờ (cạnh không đo, cả lúc lập tuyến lẫn lúc chấm) không dùng chính ngày đang chấm.
+    bo_ngay = ngay if '--ho-so-bo-ngay' in sys.argv else None
+    d = DinhTuyen.nap(None, bo_ngay=bo_ngay)
     d.phat_re_trai_s = next((float(a.split('=', 1)[1]) for a in sys.argv if a.startswith('--phat-re-trai=')),
                             d.phat_re_trai_s)
-    r_ho_so = np.array(d.mh.r_gio, dtype=np.float32)          # (24, n): cạnh có đủ dữ liệu / loại đường
+    # --toi-uu-cu: tối ưu như trước QĐ-031 (không có luật "không dự kiến chậm hơn tuyến ngắn nhất").
+    d.toi_uu_khong_cham_hon_ngan = '--toi-uu-cu' not in sys.argv
+    r_ho_so =np.array(d.mh.r_gio, dtype=np.float32)          # (24, n): cạnh có đủ dữ liệu / loại đường
     v_trong, dai = d.mh.v_trong.astype(np.float64), d.dai
     n = len(dai)
     dau_cuoi = list(d.bd.G.edges())                           # chỉ số cạnh -> (nút đầu, nút cuối)
@@ -281,6 +285,10 @@ def main():
         # C, D: biết tình trạng đo được ở lần chụp mới nhất <= t0.
         biet_luc(k0, t0.hour)
         cd = {(a, b): d.tim(pa, pb, t0, phuong_an=('nhanh_nhat', 'toi_uu')) for (a, pa), (b, pb) in cap}
+        # Giờ đến DỰ KIẾN của tuyến A theo cùng tình trạng C/D biết lúc đi (None nếu A qua đường đang đóng) — để thử
+        # luật "tuyến tối ưu không được dự kiến chậm hơn quá mức" trên số đã chấm (QĐ-031).
+        du_a = {k: (d.chi_phi_tuyen(v['ngan_nhat']['canh'], t0, 'nhanh_nhat') if v['ngan_nhat'] else None)
+                for k, v in ab.items()}
         # F, G: theo dự báo; H: biết trước r thật (trần). Làm trước E (biet_luc của E xóa dự báo).
         fgh = {}
         nen = np.where(np.isnan(R[k0]), r_ho_so[t0.hour], R[k0])
@@ -339,6 +347,9 @@ def main():
                         vao_dong_E=c['vao_dong'], m_E=round(sum(dai[i] for i in c['da_di'])),
                         so_tinh_E=c['so_tinh'], so_doi_E=c['so_doi'], ket_dong_E=c['ket_dong'])
             dong['du_doan_C'] = cd[(a, b)]['nhanh_nhat']['tg_du_kien_s'] / 60
+            dong['du_doan_D'] = cd[(a, b)]['toi_uu']['tg_du_kien_s'] / 60
+            dong['D_doi_sang_C'] = bool(cd[(a, b)]['toi_uu'].get('doi_sang_nhanh_nhat', False))
+            dong['du_doan_A'] = du_a[(a, b)][1] / 60 if du_a[(a, b)] else np.nan
             hang.append(dong)
         print(f'{gio}: {sum(1 for h in hang if h["gio"] == gio)} chuyen, {time.time() - t1:.0f}s', flush=True)
 
@@ -348,6 +359,8 @@ def main():
         (f'_nguong{nguong:.0f}' if nguong != NGUONG_DOI_S else '') + \
         (f'_retrai{d.phat_re_trai_s:.0f}' if d.phat_re_trai_s != PHAT_RE_TRAI_S else '') + \
         ('_phatcanh' if phat_kieu == 'canh' else '') + \
+        ('_toiuucu' if not d.toi_uu_khong_cham_hon_ngan else '') + \
+        ('_hosobongay' if bo_ngay else '') + \
         (f'_dubao-{ten_du_bao}' + ('' if cach_du_bao == 'muc' else f'-{cach_du_bao}') if ten_du_bao else '')
     kq.to_csv(os.path.join(RA, f'cham_tuyen_{ngay}{hau_to}.csv'), index=False, encoding='utf-8-sig')
     print(f'he so canh khong co so do: {he_so}; nguong doi tuyen E: {nguong:.0f}s')

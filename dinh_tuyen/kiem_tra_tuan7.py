@@ -31,15 +31,15 @@ def main():
     dat = True
     for gio in (3, 8):
         luc = dt.datetime.combine(NGAY, dt.time(gio, 0))
-        thoi, tiet_kiem, loi_luat, loi_dong, khong_thay = [], [], 0, 0, 0
+        thoi, tiet_kiem, loi_luat, loi_dong, khong_thay = [], [], 0, 0, []
         ket_n, ket_o, trai_n, trai_o = [], [], [], []
         for (a, pa), (b, pb) in itertools.permutations(DIA_DIEM.items(), 2):
             t = time.time()
             kq = d.tim(pa, pb, luc)
-            thoi.append(time.time() - t)
             if any(kq[k] is None for k in ('ngan_nhat', 'nhanh_nhat', 'toi_uu')):
-                khong_thay += 1
+                khong_thay.append((a, b, pa, pb))
                 continue
+            thoi.append(time.time() - t)        # chỉ cặp có đường: không có đường thì A* phải duyệt hết đồ thị
             for k in ('ngan_nhat', 'nhanh_nhat', 'toi_uu'):
                 lc, lr = soat_luat(d.bd, kq[k])
                 loi_luat += lc + lr
@@ -51,14 +51,25 @@ def main():
             trai_n.append(kq['ngan_nhat']['so_re_trai_lon'])
             trai_o.append(kq['toi_uu']['so_re_trai_lon'])
         tk = np.array(tiet_kiem)
-        print(f'\nXuat phat {gio:02d}:00 — {len(thoi)} cap diem, khong tim duoc {khong_thay}')
-        print(f'  thoi gian tra 3 tuyen: TB {np.mean(thoi):.2f}s, cham nhat {np.max(thoi):.2f}s')
+        # Cặp không có đường: bỏ đường đóng (của lần chụp mới nhất) mà tìm được thì là do đường đóng bao kín điểm,
+        # không phải lỗi đồ thị / thuật toán (14/11: lối vào điểm Lăng Cha Cả đóng ở lần chụp 13/11 19:30).
+        bi_dong = 0
+        if khong_thay:
+            cam_cu = d.mh.cam.copy()
+            d.dat_tinh_trang(cam=np.zeros_like(cam_cu))
+            bi_dong = sum(all(d.tim(pa, pb, luc)[k] is not None for k in ('ngan_nhat', 'nhanh_nhat', 'toi_uu'))
+                          for _, _, pa, pb in khong_thay)
+            d.dat_tinh_trang(cam=cam_cu)
+        print(f'\nXuat phat {gio:02d}:00 — {len(thoi) + len(khong_thay)} cap diem, khong tim duoc {len(khong_thay)}'
+              + (f' (bo duong dong thi tim duoc {bi_dong}; diem den: {sorted({b for _, b, _, _ in khong_thay})})'
+                 if khong_thay else ''))
+        print(f'  thoi gian tra 3 tuyen (cap co duong): TB {np.mean(thoi):.2f}s, cham nhat {np.max(thoi):.2f}s')
         print(f'  loi luat: {loi_luat} | di vao canh dang dong: {loi_dong}')
         print(f'  nhanh nhat so voi ngan nhat: tiet kiem TB {tk[:, 0].mean():.1f} phut ({tk[:, 1].mean():.1f}%), '
               f'lon nhat {tk[:, 0].max():.1f} phut; nhanh hon o {(tk[:, 0] > 0.05).mean():.0%} cap')
         print(f'  so canh ket nang (r<0,4): nhanh nhat TB {np.mean(ket_n):.1f} -> toi uu TB {np.mean(ket_o):.1f}')
         print(f'  re trai qua truc lon: ngan nhat TB {np.mean(trai_n):.2f} -> toi uu TB {np.mean(trai_o):.2f}')
-        dat &= khong_thay == 0 and loi_luat == 0 and loi_dong == 0 and np.max(thoi) < 2.0 and (tk[:, 0] >= -0.05).all()
+        dat &= len(khong_thay) == bi_dong and loi_luat == 0 and loi_dong == 0 and np.max(thoi) < 2.0 and (tk[:, 0] >= -0.05).all()
 
     # Mưa to: tuyến tối ưu né cạnh dễ ngập. Mỗi điểm ngập đã ghép (bac/ngap_diem.parquet, nguyên nhân mưa):
     # đặt điểm đi / đến cách trung điểm cạnh ngập ~800 m về hai phía (đông–tây và bắc–nam), để tuyến
@@ -112,6 +123,8 @@ def main():
     so_tuyen, vi_pham, sai_dau, thoi_k, gian = [], 0, 0, [], []
     for pa, pb in itertools.permutations(DIA_DIEM.values(), 2):
         goc = d.tim(pa, pb, luc, phuong_an=('toi_uu',))['toi_uu']
+        if goc is None:             # không có đường (đã đếm ở phần 3 phương án) — vd đích bị đường đóng bao kín
+            continue
         t = time.time()
         ds = d.tuyen_thay_the(pa, pb, luc, tuyen_dau=goc)
         thoi_k.append(time.time() - t)
@@ -131,10 +144,15 @@ def main():
     # lúc đi) thì tuyến tính lại từ 1/3 và 2/3 chuyến phải có chi phí BẰNG phần còn lại của tuyến cũ
     # (nguyên lý tối ưu Bellman); tuyến ghép (đoạn đã đi + tuyến mới) không sai luật, không quay đầu tại chỗ.
     # Đặt ở cuối vì dat_tinh_trang thay tình trạng của d.
+    # Tắt luật QĐ-031: phần này kiểm THUẬT TOÁN tìm (tối ưu chi phí); luật cố ý trả tuyến nhanh nhất khi tối ưu dự kiến
+    # chậm hơn ngắn nhất nên không còn tối ưu chi phí (14/11: bật luật 15/20, cả 5 lần lệch đều do luật đổi tuyến).
     d.dat_tinh_trang(d.mh.r_gio[8].copy())
+    d.toi_uu_khong_cham_hon_ngan = False
     sai_bellman, sai_luat_ghep, quay_dau, so_lan = 0, 0, 0, 0
     for pa, pb in cap:
         r = d.tim(pa, pb, luc, phuong_an=('toi_uu',))['toi_uu']
+        if r is None:
+            continue
         nut, canh = r['nut'], r['canh']
         for k in (len(canh) // 3, 2 * len(canh) // 3):
             if k < 1:

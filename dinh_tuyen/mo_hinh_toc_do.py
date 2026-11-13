@@ -41,8 +41,10 @@ class MoHinhTocDo:
         self.v_max = float(np.nanmax(v_trong * np.nanmax(r_gio, axis=0)))
 
     @classmethod
-    def nap(cls, luc=None):
-        """Dựng từ tầng bạc. luc: thời điểm xuất phát dự kiến (để quyết định có dùng số đo hiện tại)."""
+    def nap(cls, luc=None, bo_ngay=None):
+        """Dựng từ tầng bạc. luc: thời điểm xuất phát dự kiến (để quyết định có dùng số đo hiện tại).
+        bo_ngay: 'YYYY-MM-DD' — hồ sơ r / co_so_do KHÔNG dùng tệp ngày đó (chấm một ngày mà hồ sơ không biết
+        ngày đó, QĐ-031 mục 4). Phần lần chụp mới nhất không đổi."""
         from do_thi import TOC_DO
         canh = pd.read_parquet(os.path.join(GOC, 'du_lieu', 'do_thi', 'canh.parquet'), columns=['loai', 'dai'])
         n, loai = len(canh), canh['loai'].to_numpy()
@@ -63,6 +65,8 @@ class MoHinhTocDo:
         dem_c = np.zeros((24, n), dtype=np.float32)
         nghich_c = np.zeros((24, n), dtype=np.float32)
         for tep in sorted(glob.glob(os.path.join(BAC, 'tomtom_canh', '*.parquet'))):
+            if bo_ngay is not None and os.path.splitext(os.path.basename(tep))[0] == bo_ngay:
+                continue
             s = pd.read_parquet(tep, columns=['khung', 'chi_so', 'muc', 'phu'])
             s = s[s['phu'] > 0]
             r = np.maximum(s['muc'].to_numpy() / 100, R_SAN)

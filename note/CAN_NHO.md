@@ -146,6 +146,17 @@
   - Mọi đặc trưng tra theo "khung + tầm" (hồ sơ giờ đích…) phải có giá trị cả khi giờ đích nằm SAU dữ liệu.
   - Chấm MAE chỉ trên ô có nhãn thì KHÔNG BAO GIỜ thấy lỗi kiểu này, vì ô có nhãn luôn có giờ đích trong dữ liệu. Vậy mà dự báo "bây giờ" trên web luôn rơi đúng chỗ đó: 60 phút kém đi 53%.
   - Cách soát: so MAE THEO GIỜ của tệp cũ (dữ liệu dừng sớm hơn) với tệp mới ở các khung cuối của tệp cũ.
+- **Chấm tuyến KHÔNG lặp lại đúng từng số sau khi thêm dữ liệu** (14/11, QĐ-031 mục 3):
+  - Hồ sơ giờ `r_gio` (`dinh_tuyen/mo_hinh_toc_do.py`) tính từ MỌI tệp `bac/tomtom_canh/*.parquet`. Thêm ngày mới thì phút của mọi chuyến đổi chút ít: thêm 1,5 ngày làm phút đổi TB +0,036 trên 23,4.
+  - Muốn so "trước / sau khi sửa mã" thì phải chạy cả hai lần trên CÙNG bộ tệp. Đang chạy so sánh thì không kéo dữ liệu mới.
+  - Phép tự kiểm "phút phải trùng lần chạy cũ" chỉ đúng khi dữ liệu không đổi. Tuyến A, B thì luôn phải trùng.
+  - Hồ sơ đó gồm cả ngày đang chấm. Muốn chấm "không biết trước" thì dùng `cham_tuyen_that.py <ngay> --ho-so-bo-ngay` (QĐ-031 mục 4).
+- **Từ QĐ-031, xin riêng `toi_uu` thì `DinhTuyen.tim` chạy thêm 2 lần tìm đường** (ngắn nhất, nhanh nhất) để áp luật. Công cụ chấm chậm hơn khoảng 30%. Muốn số / tốc độ như trước 14/11: `TOI_UU_KHONG_CHAM_HON_NGAN = False` hoặc `cham_tuyen_that.py --toi-uu-cu`.
+- **`kiem_tra_tuan7.py` dùng đường đóng của lần chụp MỚI NHẤT dù giờ kiểm là 30/10.** Dữ liệu mới có thể làm một địa danh bị đường đóng bao kín (14/11: Lăng Cha Cả, 9/90 cặp không có đường). Từ 14/11 bài kiểm thử lại không đóng đường, nếu tìm được thì báo riêng, không tính là lỗi.
+  - Đích không tới được thì A* duyệt hết đồ thị, mất khoảng 5 s (cặp có đường chậm nhất 0,78 s). API nên chặn sớm hoặc bám điểm vào nút tới được (việc khi làm app).
+  - Phần kiểm Bellman (tính lại giữa đường) phải TẮT luật QĐ-031, vì luật cố ý không tối ưu chi phí.
+- **Giờ "ĐĂNG KÝ TRƯỚC" phải lấy từ `date` NGAY lúc ghi** (14/11: lỡ ghi 03:10 khi đồng hồ mới 03:05, đã sửa). Giờ ghi sau giờ thật làm mất ý nghĩa đăng ký trước.
+- **Đang chạy chấm nhiều ngày thì KHÔNG sửa mã định tuyến** (`ba_phuong_an.py`, `mo_hinh_toc_do.py`, `tim_duong.py`, `cham_tuyen_that.py`): mỗi ngày là một tiến trình Python mới, nên các ngày sau sẽ chạy mã đã sửa. Chỉ sửa ghi chú và script đọc kết quả.
   - Khi so "trước / sau" một thay đổi, cắt về đúng tập ô đã báo trước đây, kẻo lẫn hiệu ứng khung cuối (13/11 suýt báo nhầm "Graph WaveNet giảm 0,3").
 - pandas 3 dùng `datetime64[us]`: `DatetimeIndex.asi8` là micro giây, KHÔNG phải nano giây. So khoảng cách khung thì trừ hai `DatetimeIndex` rồi so với `pd.Timedelta`.
 - Muốn dừng tiến trình bằng psutil theo chuỗi trong dòng lệnh: phải loại PID của chính mình, và loại shell đang chạy lệnh đó, vì dòng lệnh của chúng cũng chứa chuỗi tìm. Không loại thì tự giết mình (exit 15, 13/11).

@@ -287,7 +287,8 @@ class DichVu:
                 'phut': round(r['phut'] * he_so_gio_den(luc), 1), 'phut_goc': r['phut'],
                 'so_canh_ket': r['so_canh_ket'], 'so_canh_ngap': r['so_canh_ngap'], 'so_canh_dong': r['so_canh_dong'],
                 'so_re_trai_lon': r['so_re_trai_lon'], 'ten_duong': r['ten_duong'], 'lech_di_m': r['lech_diem_di_m'],
-                'lech_den_m': r['lech_diem_den_m']}
+                'lech_den_m': r['lech_diem_den_m'],
+                'doi_sang_nhanh_nhat': bool(r.get('doi_sang_nhanh_nhat', False))}   # QĐ-031: tối ưu = nhanh nhất lúc này
 
     # ── Tuyến ──
     def tuyen(self, di, den, luc=None, mua_mm=0.0, trieu_cuong=False):
