@@ -19,7 +19,7 @@ import warnings
 import numpy as np
 import pandas as pd
 
-from ho_so_lich_su import ho_so
+from ho_so_lich_su import ho_so_mo_rong
 
 GOC = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 VANG = os.path.join(GOC, 'du_lieu', 'vang')
@@ -76,8 +76,9 @@ class BangHoc:
         # scikit-learn không chia khoảng được, và cột đó cũng chưa có gì để học.
         self.bo_vi_trong = [c for c in d.columns if c not in bo and self.hoc[c].nunique(dropna=True) < 2]
         self.dac_trung = [c for c in d.columns if c not in bo and c not in self.bo_vi_trong]
-        self.H = ho_so(self.R, pd.DatetimeIndex(self.khung), self.cat, self.dau)
-        self.chung = chung_toan_mang(self.R, self.H)
+        # H có thêm KHOANG_HO khung sau khung cuối: khung mới nhất cũng có hồ sơ ở giờ đích (QĐ-029 mục 6).
+        self.H = ho_so_mo_rong(self.R, pd.DatetimeIndex(self.khung), self.cat, self.dau, KHOANG_HO)
+        self.chung = chung_toan_mang(self.R, self.H[:len(self.khung)])
         self.so_o_chung_co = int(np.isfinite(self.chung).sum())
 
     def nhan(self, phan, y_cot):
@@ -92,7 +93,7 @@ class BangHoc:
             vt = dong.index.to_numpy()
             dich = self.fi[vt] + phut // 15
             r = dong['r'].to_numpy()
-            h_dich = np.where(dich < len(self.khung), self.H[np.minimum(dich, len(self.khung) - 1), self.ni[vt]], np.nan)
+            h_dich = np.where(dich < len(self.H), self.H[np.minimum(dich, len(self.H) - 1), self.ni[vt]], np.nan)
             X['r_ls_dich'] = h_dich
             X['ls_tru_r'] = h_dich - r
             X['lech_ls'] = r - self.H[self.fi[vt], self.ni[vt]]

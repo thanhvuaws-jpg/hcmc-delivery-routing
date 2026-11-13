@@ -138,6 +138,16 @@
   - Trước khi chấm tuyến, đo độ đúng ở mức cạnh (`danh_gia/kiem_du_bao_canh.py`), trên ngày KHÔNG đem chấm.
 - **Mốc "lịch sử theo TỪNG THỨ" yếu khi mới có 1–2 tuần** (13/11, QĐ-028): MAE 7,76 so với 6,52 của hồ sơ ngày thường / cuối tuần. So với mốc yếu thì GBM "thấp hơn 19%", nhưng so với mốc mạnh chỉ 3,5% ở 60 phút. Mỗi lần báo số dự báo phải kèm CẢ HAI mốc. Mốc theo thứ sẽ mạnh lên khi có nhiều tuần, nên tiêu chí 60 phút có thể không còn đạt.
 - **Dự báo đoạn đem xuống cạnh đều đoán lạc quan** (nhanh hơn thật 7–10%). Bộ định tuyến lại chọn đúng cạnh bị đoán nhanh, nên giờ đến hứa sớm 1,2–1,5 phút. Muốn so cách nào đoán giờ đến tốt hơn thì xem cả LỆCH (dấu), không chỉ sai TB.
+- **Đặc trưng theo khung phải dùng thông tin CỦA ĐÚNG lúc đó** (13/11, QĐ-029 mục 5):
+  - Sự cố TomTom đổi hình học theo thời gian, vì hàng kẹt dài ra. Gán đoạn theo hình "dài nhất cả đời sự cố" là rò rỉ tương lai.
+  - Dấu hiệu nhận ra: thêm dữ liệu ngày MỚI mà đặc trưng của khung CŨ đổi.
+  - Tự kiểm "dự báo mới so với tệp cũ trên ô trùng" (`du_bao_moi.py`) bắt được lỗi này. Giữ phép tự kiểm đó.
+- **Khung CUỐI dữ liệu = lúc chạy thật, phải chấm riêng** (13/11, QĐ-029 mục 6):
+  - Mọi đặc trưng tra theo "khung + tầm" (hồ sơ giờ đích…) phải có giá trị cả khi giờ đích nằm SAU dữ liệu.
+  - Chấm MAE chỉ trên ô có nhãn thì KHÔNG BAO GIỜ thấy lỗi kiểu này, vì ô có nhãn luôn có giờ đích trong dữ liệu. Vậy mà dự báo "bây giờ" trên web luôn rơi đúng chỗ đó: 60 phút kém đi 53%.
+  - Cách soát: so MAE THEO GIỜ của tệp cũ (dữ liệu dừng sớm hơn) với tệp mới ở các khung cuối của tệp cũ.
+  - Khi so "trước / sau" một thay đổi, cắt về đúng tập ô đã báo trước đây, kẻo lẫn hiệu ứng khung cuối (13/11 suýt báo nhầm "Graph WaveNet giảm 0,3").
+- pandas 3 dùng `datetime64[us]`: `DatetimeIndex.asi8` là micro giây, KHÔNG phải nano giây. So khoảng cách khung thì trừ hai `DatetimeIndex` rồi so với `pd.Timedelta`.
 - Muốn dừng tiến trình bằng psutil theo chuỗi trong dòng lệnh: phải loại PID của chính mình, và loại shell đang chạy lệnh đó, vì dòng lệnh của chúng cũng chứa chuỗi tìm. Không loại thì tự giết mình (exit 15, 13/11).
 - `distances_bay_2017.csv` KHÔNG có dòng tiêu đề, `distances_la_2012.csv` có — đọc kiểu `header=None` rồi bỏ dòng "from" nếu có.
 - Google Drive (thư mục chia sẻ của tác giả bài báo): `gdown.download_folder(id=..., skip_download=True)` để xem mã tệp, rồi `gdown.download(id=...)`.

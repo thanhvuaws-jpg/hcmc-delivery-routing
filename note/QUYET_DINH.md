@@ -881,7 +881,7 @@ Người dùng hỏi "hiện tại có khả quan không". Đã trả lời bằ
 - Web: lúc 13/11 19:30 lớp dự báo cho 19:45–20:00 (tầm 30) và 20:15–20:30 (tầm 60), 5.716 đoạn. API đọc tệp dự báo mới nhất.
 - **Tự kiểm phát hiện LỖI RÒ RỈ** (xem mục 5): dự báo mới lệch dự báo cũ trên 35.386/2,9 triệu ô, chỉ từ 11/11 17:00 (lúc sự cố có lại); r giống hệt.
 
-### 5. Lỗi rò rỉ thông tin tương lai ở đặc trưng sự cố (TÌM 13/11 ~20:00, CHƯA SỬA)
+### 5. Lỗi rò rỉ thông tin tương lai ở đặc trưng sự cố (TÌM 13/11 ~20:00, ĐÃ SỬA 13/11 21:50 — số đã báo KHÔNG đổi)
 
 - `xu_ly/bac_su_co.py` gán mỗi sự cố vào cạnh theo hình học của lần ghi DÀI NHẤT trong suốt đời sự cố (`dai_nhat`, rồi `canh`). `xu_ly/vang.py` dùng tập cạnh đó cho MỌI khung có sự cố.
 - Hệ quả: hàng kẹt về sau dài ra thì ở khung trước đó, `su_co` / `tre_su_co_s` đã ghi trên những đoạn nó CHƯA tới. Thêm dữ liệu 13/11 làm hình "dài nhất" của các sự cố tối 12/11 đổi, nên đặc trưng khung cũ đổi theo (lệch dự báo tới 0,45 ở 12/11 21–22 giờ).
@@ -892,6 +892,53 @@ Người dùng hỏi "hiện tại có khả quan không". Đã trả lời bằ
   1. dựng lại;
   2. `du_bao_moi.py --hoc-lai` để so MAE theo ngày trước / sau;
   3. thêm `--het-hoc` cho `hoc_sau_hcm.py`, train lại Graph WaveNet che sự cố cùng mốc 08/11 16:15, so theo ngày.
+- **Đã sửa:**
+  - `xu_ly/bac_su_co.py`: mỗi dòng `su_co_khung` có `hinh_ma` (mã 64 bit của hình học lần ghi đó). 40.558 hình khác nhau, mỗi hình ghép một lần (226 s), ra `du_lieu/bac/su_co_hinh.parquet`. Hình dài nhất trong `su_co.parquet` chỉ còn để mô tả / thống kê.
+  - `xu_ly/vang.py`: gán sự cố vào đoạn theo `hinh_ma` của từng dòng.
+  - Dựng lại: 302/302 mục kiểm ĐẠT, pytest 67/67. Log `mo_hinh/ket_qua/sua_ro_ri_su_co_2026-11-13.log`.
+- **Train lại cùng mốc cắt 08/11 16:15** (học, hồ sơ, tình trạng chung như lần train chính):
+  - GBM + hồ sơ: `du_bao_moi.py --hoc-lai` (3 × ~236 s). Log `gbm_sau_sua_su_co_2026-11-13.log`.
+  - Graph WaveNet che sự cố: `hoc_sau_hcm.py gwn --ho-so --them-kenh --che-su-co --het-hoc=2026-11-08T16:15` (50 vòng, dừng sớm, 81 phút). Log `gwn_che_sau_sua_2026-11-13.log`.
+  - Tệp cũ cất ở `mo_hinh/ket_qua/cu_truoc_sua_su_co/` (không lên git).
+- **So trên ĐÚNG tập ô đã báo số** (giờ đích ≤ 12/11 22:30). Mã `mo_hinh/so_truoc_sau_sua_su_co.py`, log `so_truoc_sau_sua_su_co_2026-11-13.log`. Bên "trước" tái lập đúng số QĐ-026/027.
+
+  | MAE (điểm %) | 15 phút | 30 phút | 60 phút |
+  |---|---|---|---|
+  | GBM + hồ sơ: trước → sau | 5,477 → 5,475 | 6,162 → 6,167 | 6,295 → 6,292 |
+  | Graph WaveNet che: trước → sau | 5,791 → 5,791 | 6,251 → 6,250 | 6,303 → 6,307 |
+  | Riêng từ 11/11 17:00 (lúc có sự cố lại), GBM / Graph WaveNet | −0,005 / +0,002 | +0,013 / +0,001 | +0,002 / +0,005 |
+
+  - Mọi chênh ≤ 0,02 điểm, nhỏ hơn nhiều so với khoảng tin cậy bootstrap (QĐ-027, rộng ~0,04–0,13). **Rò rỉ không làm đẹp số đã báo.** Mọi kết luận của QĐ-026 → QĐ-029 giữ nguyên, không cần chạy lại bootstrap.
+  - Tối Chủ nhật 08/11 của bản thêm kênh vẫn giữ lợi thế: 60 phút 7,68 (trước 7,70) so với 8,73 của bản không thêm kênh.
+  - Dòng "o GBM doi du bao" trong log gần bằng "toàn bộ": train lại thì cây đổi nhẹ ở hầu hết ô, không riêng ô có sự cố.
+  - Vì sao rò rỉ gần như không giúp (giả thuyết, chưa kiểm riêng): ô có sự cố chỉ ~5,8% (11–12/11), và mô hình dựa chủ yếu vào r, hồ sơ, tình trạng chung (ablation QĐ-026).
+- Lúc đầu so trên mọi ô có nhãn hiện nay, thấy Graph WaveNet "giảm" tới 0,3 điểm từ 11/11 17:00. Đó là do lỗi khác ở các khung CUỐI của tệp cũ (mục 6), không phải do sửa rò rỉ. Đã sửa bảng.
+
+### 6. Khung CUỐI dữ liệu thiếu hồ sơ ở giờ đích → dự báo "bây giờ" trên web kém (TÌM VÀ SỬA 13/11 21:50–22:00)
+
+- **Phát hiện:** so MAE theo giờ thì thấy tệp cũ (dữ liệu tới 12/11 22:30) kém hẳn ở giờ cuối:
+  - GBM 60 phút lúc 12/11 22 giờ: 10,04, so với 6,50 khi dữ liệu kéo dài thêm;
+  - Graph WaveNet: 15,83 so với 6,29.
+- **Nguyên nhân:**
+  - `dac_trung.BangHoc.X` lấy hồ sơ ở giờ đích bằng chỉ số khung + tầm/15. Khi giờ đích vượt khung cuối thì đặt NaN.
+  - `hoc_sau_hcm` đệm NaN cho RA khung sau cùng, rồi "mức nền" lấy TB chung 0,796.
+  - Khung mới nhất chính là khung mà API `/api/du-bao` dùng cho dự báo "bây giờ". Vậy lớp dự báo trên web luôn thiếu đúng đặc trưng mạnh nhất: 1 khung cuối ở tầm 15 phút, 2 khung ở 30, 4 khung ở 60.
+  - Mọi số MAE đã báo KHÔNG dính, vì chỉ chấm ô có nhãn, tức giờ đích nằm trong dữ liệu.
+- **Phép thử** (mô hình mới, ô 12/11 21:00–22:30, xóa hồ sơ giờ đích như khi đó là khung cuối):
+  - 60 phút: 6,82 → 10,46 (+53%);
+  - 30 phút: 7,08 → 9,17;
+  - 15 phút: 6,47 → 6,94.
+  - Khớp hiện tượng ở tệp cũ.
+- **Sửa:**
+  - `ho_so_lich_su.ho_so_mo_rong(R, khung, cat, dau, them)` tính hồ sơ thêm `them` khung sau khung cuối. Hồ sơ chỉ phụ thuộc loại ngày, ô 15 phút và phần học, nên tính trước được, không rò rỉ.
+  - Hàm báo lỗi nếu khung không cách đều 15 phút.
+  - `dac_trung` và `hoc_sau_hcm` dùng hàm này. Test `test_ho_so_mo_rong_co_gio_dich_sau_khung_cuoi`; pytest 68/68.
+- **Kiểm:**
+  - Chạy lại `du_bao_moi.py` (mô hình cũ, không học lại) và `hoc_sau_hcm.py ... --chi-du-bao`. MAE ô có nhãn trùng từng số, 0 ô có nhãn đổi.
+  - Chỉ các khung cuối đổi. GBM: 13/11 19:30 (15 phút), 19:15–19:30 (30), 18:45–19:30 (60). Đổi TB 3,0 / 4,1 / 5,3 điểm, lớn nhất 46 điểm.
+  - Graph WaveNet đổi TB ~17–18 điểm.
+  - Log: `gbm_sau_sua_khung_cuoi_2026-11-13.log`, `gwn_sau_sua_khung_cuoi_2026-11-13.log`.
+- **Việc tiếp:** khi kéo dữ liệu 14/11 về, đo MAE thật của các khung 13/11 18:45–19:30 (giờ đích lúc đó còn chưa có) để có số "dự báo bây giờ" ngoài mẫu đúng nghĩa. Lần train cuối phải chấm riêng nhóm "khung cuối dữ liệu", mô phỏng lúc chạy thật.
 
 ## QĐ-030 — Thêm module "Trợ lý luật giao thông" dạng RAG đa nguồn, làm SAU khi xong train và chỉnh chu (13/11/2026)
 

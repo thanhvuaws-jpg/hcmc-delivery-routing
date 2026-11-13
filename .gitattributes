@@ -1,0 +1,2 @@
+# Script bash phải xuống dòng kiểu LF (core.autocrlf=true trên máy Windows sẽ đổi sang CRLF và Git Bash báo lỗi "\r").
+*.sh text eol=lf

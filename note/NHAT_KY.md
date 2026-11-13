@@ -4,6 +4,20 @@ Mục mới nhất ở trên cùng.
 
 > 30/10/2026 11:53: các mục trong ngày từng ghi giờ ước chừng (13:00, 14:30…) — SAI, đồng hồ thật khi đó chưa tới 12:00. Đã sửa: chỉ ghi giờ có bằng chứng (giờ tệp, lệnh `date`, giờ trên AWS).
 
+## 13/11/2026 (20:0x → 22:0x) — sửa rò rỉ sự cố (số không đổi); sửa lỗi khung cuối của dự báo "bây giờ" (QĐ-029 mục 5, 6)
+
+- Sửa rò rỉ: `bac_su_co.py` thêm `hinh_ma`, ra `su_co_hinh.parquet`; `vang.py` gán theo hình của từng lần ghi; dựng lại 20:05 → 20:12 (302/302, pytest 67/67).
+- `hoc_sau_hcm.py --het-hoc=T`: mốc cắt cố định cho học sâu. Train lại Graph WaveNet che sự cố cùng mốc 08/11 16:15: 20:12 → 21:34, 81 phút, 50 vòng.
+- `du_bao_moi.py --hoc-lai`: 21:36 → 21:50.
+- `mo_hinh/so_truoc_sau_sua_su_co.py`: trên đúng tập ô đã báo, GBM 5,477/6,162/6,295 → 5,475/6,167/6,292; Graph WaveNet 5,791/6,251/6,303 → 5,791/6,250/6,307. **Rò rỉ không làm đẹp số; mọi kết luận giữ nguyên.**
+- Bảng theo giờ lộ lỗi khác: khung cuối dữ liệu thiếu hồ sơ ở giờ đích. Phép thử: 60 phút 6,82 → 10,46.
+  - Sửa bằng `ho_so_lich_su.ho_so_mo_rong`, dùng trong `dac_trung` và `hoc_sau_hcm`. Thêm test, pytest 68/68.
+  - Dự báo lại: ô có nhãn trùng từng số, chỉ các khung cuối 13/11 đổi.
+  - Lớp dự báo "bây giờ" trên web từ nay đúng. API lúc này không chạy nên không cần khởi động lại.
+- Đính chính với người dùng: lúc 21:3x đã nói "12/11 60 phút 6,36 → 6,24 (giảm)". Số đó lẫn thêm các khung cuối 12/11 mới có nhãn; trên cùng tập ô thì 6,364 → 6,369, tức không đổi.
+- `.gitattributes`: `*.sh` xuống dòng LF (Git Bash báo lỗi `\r` sau khi đổi nhánh).
+- Còn dở: khi có dữ liệu 14/11, đo MAE thật của các khung 13/11 18:45–19:30 (dự báo "bây giờ" ngoài mẫu đúng nghĩa).
+
 ## 13/11/2026 (17:4x → 20:0x) — "làm hết": hiệu chỉnh giờ đến, chấm lại 14 ngày, Kaggle, dự báo "bây giờ" (QĐ-029); RAG luật (QĐ-030)
 
 - Người dùng hỏi:

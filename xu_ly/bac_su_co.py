@@ -11,11 +11,17 @@ Mỗi khung 5 phút giữ một lần chụp, ưu tiên AWS (như bac_tomtom.py)
 
 Đầu ra:
   du_lieu/bac/su_co_khung/YYYY-MM-DD.parquet
-      khung, id, loai (uint8), muc_tre (uint8), tre_s, dai_m (float32), chac_chan (bool), nguon
+      khung, id, hinh_ma (uint64: hình học CỦA LẦN GHI ĐÓ), loai (uint8), muc_tre (uint8), tre_s,
+      dai_m (float32), chac_chan (bool), nguon
+  du_lieu/bac/su_co_hinh.parquet
+      hinh_ma, canh, canh_m, ty_le_ghep, ma_do_thi — mỗi hình học khác nhau ghép vào cạnh một lần.
+      Tầng vàng gán sự cố vào đoạn theo bảng này (QĐ-029 mục 5: trước 13/11 dùng hình dài nhất cả đời sự cố
+      cho mọi khung = biết trước hàng kẹt sẽ lan tới đâu).
   du_lieu/bac/su_co.parquet
       id, ten_loai, tu, den, mo_ta, lan_dau, lan_cuoi, so_khung, tre_s_max, dai_m_max,
       muc_tre_max, bat_dau, ket_thuc (giờ VN, từ TomTom), canh (list chỉ số cạnh),
-      canh_m (mét trùng trên từng cạnh), ty_le_ghep, hinh_hoc (lần dài nhất, [lon, lat])
+      canh_m (mét trùng trên từng cạnh), ty_le_ghep, hinh_hoc (lần dài nhất, [lon, lat]) — chỉ để MÔ TẢ /
+      thống kê, không dùng làm đặc trưng theo khung
   du_lieu/bac/su_co_lan_chup.parquet
       khung, nguon — mọi lần chụp sự cố đã có, kể cả lần trống (để biết khung nào THIẾU dữ liệu)
 
@@ -29,6 +35,7 @@ import gzip
 import json
 import os
 import sys
+import time
 
 import numpy as np
 import pandas as pd
@@ -44,6 +51,27 @@ SU_CO_MAY = os.path.join(GOC, 'du_lieu', 'tomtom', 'su_co')
 SU_CO_AWS = os.path.join(GOC, 'du_lieu', 's3', 'dong', 'tomtom_su_co')
 BAC = os.path.join(GOC, 'du_lieu', 'bac')
 RA_KHUNG = os.path.join(BAC, 'su_co_khung')
+TEP_HINH = os.path.join(BAC, 'su_co_hinh.parquet')
+
+
+def ma_hinh(chuoi):
+    """Mã 64 bit của chuỗi hình học (giống nhau -> cùng mã); 0 = không có hình."""
+    s = pd.Series(chuoi).fillna('')
+    ma = pd.util.hash_pandas_object(s, index=False).to_numpy().astype(np.uint64)
+    ma[s.to_numpy() == ''] = 0
+    return ma
+
+
+def ghep_hinh(bo, hh):
+    """Hình học (chuỗi JSON [[lon, lat], ...]) -> (cạnh, mét trùng từng cạnh, tỉ lệ ghép được)."""
+    toa_do = json.loads(hh) if isinstance(hh, str) and hh else None
+    if not toa_do or not isinstance(toa_do[0], list) or len(toa_do) < 2:
+        return [], [], 0.0
+    cong, khong = bo.ghep([{'diem': [(b, a) for a, b in toa_do],
+                            'tt': {'traffic_level': 1.0, 'traffic_road_coverage': 'one_side'}}])
+    c = sorted(cong)
+    da = sum(v[1] for v in cong.values())
+    return np.array(c, dtype=np.int32).tolist(), [round(cong[i][1]) for i in c], round(da / max(da + khong, 1), 3)
 
 
 def doc(nguon, tep):
@@ -88,9 +116,12 @@ def main():
     tat_ca = pd.concat(phan, ignore_index=True)
     print(f'{len(khung)} khung, {len(tat_ca):,} dong su co, {tat_ca["id"].nunique()} ma su co')
 
-    # (1) Theo khung, chia tệp theo ngày.
+    # (1) Theo khung, chia tệp theo ngày. hinh_ma = hình học CỦA ĐÚNG LẦN GHI ĐÓ (QĐ-029 mục 5): tầng vàng gán sự cố vào
+    # đoạn theo hình của từng lần ghi, không theo hình dài nhất cả đời sự cố (hàng kẹt về sau mới dài ra = thông tin
+    # tương lai). Hình giống nhau chỉ ghép một lần: su_co_hinh.parquet (hinh_ma -> cạnh).
+    tat_ca['hinh_ma'] = ma_hinh(tat_ca['hinh_hoc'])
     gon = pd.DataFrame({
-        'khung': tat_ca['khung'], 'id': tat_ca['id'],
+        'khung': tat_ca['khung'], 'id': tat_ca['id'], 'hinh_ma': tat_ca['hinh_ma'],
         'loai': tat_ca['loai'].astype('uint8'), 'muc_tre': tat_ca['muc_tre'].fillna(0).astype('uint8'),
         'tre_s': tat_ca['tre_s'].astype('float32'), 'dai_m': tat_ca['dai_m'].astype('float32'),
         'chac_chan': tat_ca['kha_nang'].eq('certain'),
@@ -112,20 +143,21 @@ def main():
     bang['hinh_hoc'] = dai_nhat.set_index('id')['hinh_hoc']
 
     bo = BoGhep.nap()
-    canh, canh_m, ty_le = [], [], []
-    for hh in bang['hinh_hoc']:
-        toa_do = json.loads(hh) if isinstance(hh, str) else None
-        if not toa_do or not isinstance(toa_do[0], list) or len(toa_do) < 2:
-            canh.append([]); canh_m.append([]); ty_le.append(0.0)
-            continue
-        cong, khong = bo.ghep([{'diem': [(b, a) for a, b in toa_do],
-                                'tt': {'traffic_level': 1.0, 'traffic_road_coverage': 'one_side'}}])
-        c = sorted(cong)
-        canh.append(np.array(c, dtype=np.int32).tolist())
-        canh_m.append([round(cong[i][1]) for i in c])
-        da = sum(v[1] for v in cong.values())
-        ty_le.append(round(da / max(da + khong, 1), 3))
-    bang['canh'], bang['canh_m'], bang['ty_le_ghep'] = canh, canh_m, ty_le
+    # Mỗi hình học khác nhau ghép một lần (dùng cho cả bảng theo khung lẫn bảng mỗi sự cố).
+    hinh = tat_ca.loc[tat_ca['hinh_ma'] != 0, ['hinh_ma', 'hinh_hoc']].drop_duplicates('hinh_ma')
+    t_ghep = time.time()
+    ket = [ghep_hinh(bo, hh) for hh in hinh['hinh_hoc']]
+    hinh = pd.DataFrame({'hinh_ma': hinh['hinh_ma'].to_numpy(), 'canh': [k[0] for k in ket],
+                         'canh_m': [k[1] for k in ket], 'ty_le_ghep': [k[2] for k in ket]})
+    hinh['ma_do_thi'] = bo.ma_do_thi
+    hinh.to_parquet(TEP_HINH, index=False)
+    print(f'{len(hinh):,} hinh hoc khac nhau, ghep {time.time() - t_ghep:.0f}s -> {TEP_HINH}')
+    # Bảng mỗi sự cố: hình DÀI NHẤT, chỉ để mô tả / thống kê — KHÔNG dùng làm đặc trưng theo khung.
+    theo_ma = hinh.set_index('hinh_ma')
+    ma_dai = ma_hinh(bang['hinh_hoc'])
+    bang['canh'] = [theo_ma.at[m, 'canh'] if m in theo_ma.index else [] for m in ma_dai]
+    bang['canh_m'] = [theo_ma.at[m, 'canh_m'] if m in theo_ma.index else [] for m in ma_dai]
+    bang['ty_le_ghep'] = [float(theo_ma.at[m, 'ty_le_ghep']) if m in theo_ma.index else 0.0 for m in ma_dai]
     bang = bang.reset_index()
     bang['ma_do_thi'] = bo.ma_do_thi
     bang.to_parquet(os.path.join(BAC, 'su_co.parquet'), index=False)

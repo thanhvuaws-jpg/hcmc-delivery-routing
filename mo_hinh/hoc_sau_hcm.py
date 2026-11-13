@@ -15,12 +15,14 @@ Dữ liệu còn ít ngày thì số chỉ để KIỂM ĐƯỜNG ỐNG, chưa k
 
 Mỗi vòng lưu điểm dừng: máy tắt / ngủ giữa chừng thì chạy lại với --tiep (cùng dữ liệu).
 
-Chạy:  python hoc_sau_hcm.py [gwn|gru] [--ho-so] [--them-kenh] [--che-su-co] [--so-vong=200] [--tiep] [--chi-du-bao] [--bo-dau=0.5]
+Chạy:  python hoc_sau_hcm.py [gwn|gru] [--ho-so] [--them-kenh] [--che-su-co] [--so-vong=200] [--tiep] [--chi-du-bao] [--bo-dau=0.5] [--het-hoc=2026-11-08T16:15]
        --ho-so: học phần chênh so với hồ sơ lịch sử của đoạn ở giờ đích (ho_so_lich_su.py, QĐ-020).
        --them-kenh (cần --ho-so): thêm sự cố, phần đường đóng, mưa dự báo, tình trạng chung — để so công bằng với GBM.
        --che-su-co (cần --them-kenh): lúc học che kênh sự cố ở 20% mẫu như khi TomTom mất dữ liệu (QĐ-026).
        --chi-du-bao: không học, nạp .pt đã train (cùng cờ, cùng dữ liệu), chấm lại và ghi dự báo phần kiểm tra.
        --bo-dau=X: bỏ phần X đầu (ngày cũ nhất) của phần học, kể cả khi dựng hồ sơ — đường cong học (QĐ-027).
+       --het-hoc=T: mốc cắt CỐ ĐỊNH (khung học cuối) thay cho 70% — để so với lần train chính khi đã có thêm dữ liệu
+       (QĐ-029 mục 5: train lại sau khi sửa rò rỉ đặc trưng sự cố).
 Ra:    mo_hinh/ket_qua/hoc_sau/hcm_<mô hình>_<ngày cuối của dữ liệu>.json + .pt — giữ lại từng lần train để
        so độ ổn định qua các tuần (tính từ dữ liệu TomTom — không lên git)
        + _du_bao.parquet: dự báo phần kiểm tra (khung t, đoạn, r, du_15/30/45/60) cho so_sanh_du_bao.py và chấm tuyến
@@ -37,7 +39,7 @@ import scipy.sparse as sp
 import torch
 import torch.nn as nn
 
-from ho_so_lich_su import ho_so
+from ho_so_lich_su import ho_so_mo_rong
 from hoc_sau import GRUNut, GraphWaveNet, ma_tran_thua
 from dac_trung import chung_toan_mang
 from moc_so_sanh import KHOANG_HO, TY_LE_HOC, danh_gia, mae_theo_ngay
@@ -117,12 +119,13 @@ def main():
     ty_le_che = TY_LE_CHE if '--che-su-co' in sys.argv else 0.0
     chi_du_bao = '--chi-du-bao' in sys.argv
     bo_dau = next((float(a.split('=', 1)[1]) for a in sys.argv if a.startswith('--bo-dau=')), 0.0)
+    moc_cat = next((pd.Timestamp(a.split('=', 1)[1]) for a in sys.argv if a.startswith('--het-hoc=')), None)
     if ty_le_che and not dung_them:
         sys.exit('--che-su-co can --them-kenh')
     khung, doan, R, them = nap_vang(COT_THEM if dung_them else ())
     T, N = R.shape
     A, so_canh = do_thi(doan)
-    cat = int(T * TY_LE_HOC)
+    cat = int(T * TY_LE_HOC) if moc_cat is None else int(np.searchsorted(khung, np.datetime64(moc_cat), side='right'))
     het_hoc, dau_kiem = cat - 1, min(cat + KHOANG_HO, T - 1)
     dau = int(cat * bo_dau)
     co = ~np.isnan(R)
@@ -146,8 +149,8 @@ def main():
     # (hồ sơ đã chống rò rỉ, ho_so_lich_su.py) thay vì học từ mức trung bình chung.
     Hv = None
     if dung_ho_so:
-        Hp = np.concatenate([np.full((VAO - 1, N), np.nan, np.float32), ho_so(R, khung, cat, dau),
-                             np.full((RA, N), np.nan, np.float32)])
+        # RA khung cuối cũng có hồ sơ (không đệm NaN): khung mới nhất cần "mức nền" ở giờ đích (QĐ-029 mục 6).
+        Hp = np.concatenate([np.full((VAO - 1, N), np.nan, np.float32), ho_so_mo_rong(R, khung, cat, dau, RA)])
         Hv = torch.tensor(Hp, device=tb_)
 
     # --them-kenh: sự cố đang ghi, phần đường đóng, mưa dự báo giờ kế (đều biết tại khung t), tình trạng chung toàn mạng.
@@ -222,6 +225,8 @@ def main():
         ten_mh += '_che'
     if bo_dau:
         ten_mh += f'_bd{round(100 * bo_dau)}'
+    if moc_cat is not None:
+        ten_mh += f'_cat{moc_cat:%m%d%H%M}'
     mh = mh.to(tb_)
     toi_uu = torch.optim.Adam(mh.parameters(), lr=1e-3, weight_decay=1e-4)
     print(f'{ten_mh}: {sum(p.numel() for p in mh.parameters()):,} tham so; mau hoc/kiem dinh/kiem tra '

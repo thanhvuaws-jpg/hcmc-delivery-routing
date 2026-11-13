@@ -8,7 +8,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'mo_hinh'))
 from dac_trung import chung_toan_mang  # noqa: E402
-from ho_so_lich_su import ho_so  # noqa: E402
+from ho_so_lich_su import ho_so, ho_so_mo_rong  # noqa: E402
 from moc_so_sanh import LichSu, danh_gia, mae_theo_ngay  # noqa: E402
 
 
@@ -98,6 +98,22 @@ def test_ho_so_doan_khong_co_lich_su_la_nan():
     only = np.full_like(R, np.nan)
     only[o8[0], 0] = 0.5
     assert np.isnan(ho_so(only, khung, cat=len(khung))[o8[0], 0])  # chỉ có chính nó -> bỏ đi là hết mẫu
+
+
+def test_ho_so_mo_rong_co_gio_dich_sau_khung_cuoi():
+    """Khung cuối dữ liệu (dự báo "bây giờ") vẫn có hồ sơ ở giờ đích; phần trong dữ liệu không đổi (QĐ-029 mục 6)."""
+    khung, R, o8 = _chuoi_tuan()
+    het = int(o8[8]) - 2                       # dữ liệu dừng lúc 07:30 ngày 9 (thứ Ba) -> 08:00 nằm SAU khung cuối
+    cat = int(o8[7])
+    H = ho_so(R[:het + 1], khung[:het + 1], cat=cat)
+    Hm = ho_so_mo_rong(R[:het + 1], khung[:het + 1], cat=cat, them=4)
+    assert Hm.shape == (het + 5, 2)
+    assert np.array_equal(Hm[:het + 1], H, equal_nan=True)
+    # 08:00 thứ Ba = khung cuối + 2: TB 5 ngày thường phần học, đúng như khi dữ liệu có tới đó.
+    assert Hm[het + 2, 0] == pytest.approx(np.mean([0.1, 0.2, 0.3, 0.4, 0.5]), abs=1e-5)
+    assert Hm[het + 2, 0] == pytest.approx(ho_so(R, khung, cat=cat)[o8[8], 0], abs=1e-6)
+    with pytest.raises(ValueError):            # khung có lỗ: chỉ số + tầm/15 không còn là giờ đích
+        ho_so_mo_rong(R[[0, 1, 3]], khung[[0, 1, 3]], cat=2)
 
 
 def test_chung_toan_mang_bo_o_thieu():

@@ -13,6 +13,21 @@ Mỗi (ngày, ô 15 phút) có đúng một khung nên loại khung đó cũng l
 Loại ngày: ngày thường / cuối tuần (chưa tách từng thứ — mới vài tuần dữ liệu, mỗi thứ quá ít mẫu).
 """
 import numpy as np
+import pandas as pd
+
+
+def ho_so_mo_rong(R, khung, cat, dau=0, them=4):
+    """
+    Như ho_so nhưng thêm `them` khung SAU khung cuối: H có T + them dòng, H[:T] trùng ho_so(R, khung, cat, dau).
+    Hồ sơ chỉ phụ thuộc loại ngày, ô 15 phút và phần học, nên tính được cả cho giờ chưa có dữ liệu. Nhờ vậy khung MỚI
+    NHẤT (dự báo "bây giờ" trên web) vẫn có hồ sơ ở giờ đích. Trước 13/11 chỗ đó là NaN: MAE 60 phút ở khung cuối tăng
+    6,8 -> 10,5 (QĐ-029 mục 6). khung phải cách đều 15 phút (chỉ số khung + tầm/15 mới đúng là giờ đích).
+    """
+    khung = pd.DatetimeIndex(khung)
+    if len(khung) > 1 and not ((khung[1:] - khung[:-1]) == pd.Timedelta(minutes=15)).all():
+        raise ValueError('khung khong cach deu 15 phut: chi so khung + tam/15 se khong phai gio dich')
+    k = pd.date_range(khung[0], periods=len(khung) + them, freq='15min')
+    return ho_so(np.concatenate([R, np.full((them, R.shape[1]), np.nan, R.dtype)]), k, cat, dau)
 
 
 def ho_so(R, khung, cat, dau=0):

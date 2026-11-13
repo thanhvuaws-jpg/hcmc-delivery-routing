@@ -143,13 +143,15 @@ def main():
 
     # ── Sự cố đang ghi trên đoạn ──
     SU_CO = np.zeros((T, N), dtype=np.float32); TRE = np.zeros((T, N), dtype=np.float32)
-    sc = pd.read_parquet(os.path.join(BAC, 'su_co.parquet'), columns=['id', 'canh'])
+    # Đoạn của sự cố theo hình học CỦA TỪNG LẦN GHI (su_co_hinh.parquet), không theo hình dài nhất cả đời sự cố —
+    # cách cũ cho mô hình biết trước hàng kẹt sẽ lan tới đâu (rò rỉ, QĐ-029 mục 5).
+    sc = pd.read_parquet(os.path.join(BAC, 'su_co_hinh.parquet'), columns=['hinh_ma', 'canh'])
     sc_doan = sc.explode('canh').dropna()
     sc_doan['doan'] = doan_cua[sc_doan['canh'].astype(int)]
-    sc_doan = sc_doan[sc_doan['doan'].isin(co_du_lieu)].drop_duplicates(['id', 'doan'])
-    kh = pd.concat([pd.read_parquet(t, columns=['khung', 'id', 'tre_s'])
+    sc_doan = sc_doan[sc_doan['doan'].isin(co_du_lieu)].drop_duplicates(['hinh_ma', 'doan'])
+    kh = pd.concat([pd.read_parquet(t, columns=['khung', 'id', 'tre_s', 'hinh_ma'])
                     for t in glob.glob(os.path.join(BAC, 'su_co_khung', '*.parquet'))])
-    kh = kh.merge(sc_doan[['id', 'doan']], on='id')
+    kh = kh.merge(sc_doan[['hinh_ma', 'doan']], on='hinh_ma')
     kh['t'] = (kh['khung'] - ngay0) // pd.Timedelta('15min')
     kh = kh[(kh['t'] >= 0) & (kh['t'] < T)]
     kh = kh.groupby(['t', 'doan']).agg(so=('id', 'nunique'), tre=('tre_s', 'max')).reset_index()
