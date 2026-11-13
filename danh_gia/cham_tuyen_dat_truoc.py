@@ -82,21 +82,25 @@ def main():
         k = int(np.searchsorted(khung, np.datetime64(t), side='right')) - 1
         return k if 0 <= k < len(khung) and (t - khung[k]).total_seconds() < 600 else None
 
-    def buoc(i, t, k):
+    phat_kieu = next((a.split('=', 1)[1] for a in sys.argv if a.startswith('--phat-dong=')), 'canh')
+
+    def buoc(i, t, k, truoc_dong=False):
         dong = int(DONG[k, i])
         r = R[k, i]
         if r != r:
             r = r_ho_so[t.hour, i] * he_so
-        return dai[i] / (max(v_trong[i] * r, V_SAN) / 3.6) * (1 + PD[k, i]) + PHAT_DONG_S * dong, dong
+        phat = PHAT_DONG_S * dong if (phat_kieu == 'canh' or not truoc_dong) else 0.0
+        return dai[i] / (max(v_trong[i] * r, V_SAN) / 3.6) * (1 + PD[k, i]) + phat, dong
 
     def cham(canh, t0):
-        tau, vao_dong = 0.0, 0
+        # Mặc định 'canh' để trùng các lượt đã chấm 13/11 (QĐ-028); QĐ-029 đổi sang mỗi lần gặp: --phat-dong=lan.
+        tau, vao_dong, dong = 0.0, 0, 0
         for i in canh:
             t = t0 + dt.timedelta(seconds=tau)
             k = lan_chup(t)
             if k is None:
                 return None
-            s, dong = buoc(i, t, k)
+            s, dong = buoc(i, t, k, dong > 0)
             tau, vao_dong = tau + s, vao_dong + dong
         return tau / 60, vao_dong
 

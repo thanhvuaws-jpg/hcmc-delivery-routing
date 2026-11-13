@@ -4,6 +4,25 @@ Mục mới nhất ở trên cùng.
 
 > 30/10/2026 11:53: các mục trong ngày từng ghi giờ ước chừng (13:00, 14:30…) — SAI, đồng hồ thật khi đó chưa tới 12:00. Đã sửa: chỉ ghi giờ có bằng chứng (giờ tệp, lệnh `date`, giờ trên AWS).
 
+## 13/11/2026 (17:4x → 20:0x) — "làm hết": hiệu chỉnh giờ đến, chấm lại 14 ngày, Kaggle, dự báo "bây giờ" (QĐ-029); RAG luật (QĐ-030)
+
+- Người dùng hỏi:
+  - có khả quan không;
+  - app cuối sẽ ra sao;
+  - nhập địa chỉ và vào hẻm;
+  - khác gì Google Maps;
+  - màu kẹt có tự đổi không;
+  - RAG là gì (thầy gửi nhóm lớp).
+  Đã trả lời bằng số. Ý tưởng ghi `Y_TUONG.md`: mất GPS, sửa đường / né làn, nhập địa chỉ vào đúng hẻm (17.637 tên hẻm OSM, 97% đúng mẫu), trợ lý luật.
+- Thầy: "nếu được thì có thể làm vô" → **QĐ-030**: module trợ lý luật giao thông dạng RAG đa nguồn, làm SAU train + chỉnh chu + app.
+- QĐ-029:
+  1. Hiệu chỉnh giờ đến: đi ngay sai 0,77 → 0,71 phút, lệch −0,48 → −0,02. Đã vào API: `HE_SO_GIO_DEN`, `phut` / `phut_goc`.
+  2. Phạt đường đóng theo lần gặp, chấm lại 14 ngày (12.600 chuyến): D so với A **10,40% (CI 8,6–12,2), không chậm hơn 83,8%**, đạt 12/14 ngày (trượt 2 Chủ nhật).
+  3. Kaggle D11: không giúp (+0,00..+0,07%).
+  4. `du_bao_moi.py` + `he_thong/cap_nhat_du_lieu.sh`: kéo S3, dựng lại tới 13/11 19:30, dự báo ngoài mẫu. Web có dự báo cho giờ mới nhất.
+- **Phát hiện rò rỉ** ở đặc trưng sự cố (hình học "dài nhất" của cả đời sự cố). GBM gần như không ảnh hưởng (ablation ±0,002); học sâu thêm kênh chưa biết → sửa tiếp (QĐ-029 mục 5).
+- Tầng vàng từ nay tới 13/11. Chạy lại `moc_so_sanh` / `hoc_sau_hcm` mặc định sẽ CHIA KHÁC lần train chính (70% của 16 ngày); muốn so thì dùng mốc cắt cố định 08/11 16:15.
+
 ## 13/11/2026 (13:0x → 14:5x) — lập tuyến trước 30 phút, lớp dự báo trên web, mốc hồ sơ (QĐ-028)
 
 - Người dùng lo "vậy là dự án failer r hả", rồi "làm hết đi t lo quá". Đã trả lời bằng bảng 4 chỉ số thành công (đều đạt). Đẩy git trước: commit 3fec901 lên nhánh `train-chinh-12-11` và `main`.

@@ -799,3 +799,178 @@ Người dùng duyệt đề xuất cuối QĐ-026 và việc tiếp. Cùng tậ
   - thử D11 Kaggle 2020–21 cho hồ sơ dài hạn;
   - phạt đường đóng theo lần gặp (QĐ-023);
   - dự báo "bây giờ" cho dữ liệu mới (lưu mô hình).
+
+## QĐ-029 — Hiệu chỉnh giờ đến, phạt đường đóng theo lần gặp + chấm lại 14 ngày, thử Kaggle D11, dự báo "bây giờ" (13/11/2026, người dùng: "làm hết đi")
+
+Người dùng hỏi "hiện tại có khả quan không". Đã trả lời bằng bảng chỉ số (đều đạt) kèm hai điểm yếu thật: lợi thế dự báo 60 phút mỏng; học sâu chưa thắng GBM về MAE. Người dùng cũng nêu chuyện Google Maps mất GPS → ghi vào `Y_TUONG.md`, làm sau phần train.
+
+### 1. Hiệu chỉnh giờ đến (`danh_gia/hieu_chinh_gio_den.py`, `ket_qua/hieu_chinh_gio_den.json`)
+
+- Giờ đi dự kiến × hệ số k theo giờ xuất phát, k = Σ phút thật / Σ phút dự kiến (chuyến không vào đường đóng). Học hệ số trên ngày KHÁC ngày chấm.
+- Đi ngay (C), học trên 30/10–06/11, chấm trên 09–12/11 (3.599 chuyến):
+  - sai TB 0,766 → **0,705 phút**; lệch −0,48 → −0,02; p90 1,83 → 1,56.
+  - k từ 1,004 (19:30) tới 1,046 (17:00); hệ số chung 1,022.
+  - Hệ số theo giờ tốt hơn một hệ số chung (0,705 so với 0,731).
+  - F (theo dự báo) dùng cùng hệ số: 0,783 → 0,705.
+- Lập trước 30 phút, chia đôi theo ngày (học 09–10 chấm 11–12 và ngược lại); sai TB trước → sau:
+
+  | cách biết | trước | sau |
+  |---|---|---|
+  | giu | 1,90 | 1,33 |
+  | ls | 1,37 | **1,08** |
+  | gbm_ls | 1,44 | 1,14 |
+  | gwn | 1,42 | **1,08** |
+
+  Lệch còn ±0,16 phút mỗi nửa (k ≈ 1,06–1,07). Sau hiệu chỉnh vẫn: hồ sơ ≈ học sâu, GBM hơi kém.
+- API: `dich_vu.HE_SO_GIO_DEN` (đi ngay, theo giờ, nội suy; ngoài 06:30–19:30 không nhân); `phut` = đã hiệu chỉnh, `phut_goc` = chưa; giây dự kiến khi dẫn đường cũng nhân.
+  - Kiểm trên trình duyệt: 09/11 17:00 Bến Thành → Hàng Xanh, tối ưu dự kiến 20,3 → 21,2 phút, thực tế 21,3 phút; dẫn đường 21,23 phút.
+  - Giới hạn: hệ số học cho tuyến NHANH NHẤT (C), đem dùng chung cho cả 3 phương án; học trên 8 ngày (1 thứ Bảy, 1 Chủ nhật).
+
+### 2. Phạt đường đóng theo LẦN GẶP + chấm lại 14 ngày (việc tồn của QĐ-023)
+
+- `cham_tuyen_that.py`: +300 s cho MỖI LẦN GẶP một dãy cạnh đóng liền nhau (trước: mỗi cạnh, một dãy 10 cạnh = 50 phút, quá tay). Chạy lại kiểu cũ bằng `--phat-dong=canh` (tệp `_phatcanh`).
+  - API `dich_vu._chay_lai` đổi theo cho khớp.
+  - `cham_tuyen_dat_truoc.py` giữ mặc định 'canh' để trùng số QĐ-028; có `--phat-dong=lan`.
+  - Kết quả cũ (8 ngày, phạt mỗi cạnh) chuyển vào `danh_gia/ket_qua/cu_phat_canh/`.
+- Chấm lại bộ điểm giao hàng thật, **14 ngày 30/10–12/11** (thêm 07/11 thứ Bảy, 08/11 Chủ nhật và 09–12/11). 90 cặp × 10 giờ = **12.600 chuyến**; 3 tiến trình song song 17:54 → 19:24. Tổng hợp `tong_hop_cham.py`:
+
+  | so sánh | nhanh hơn | CI 95% (theo cặp) | Wilcoxon p |
+  |---|---|---|---|
+  | **D tối ưu so với A ngắn nhất** | **10,40%** (23,4 → 20,9 phút) | 8,60 .. 12,24 | 9,5e-16 |
+  | E tính lại so với A | 11,57% | 9,70 .. 13,48 | 5,4e-16 |
+  | D so với B bản đồ thường | 10,22% | 8,44 .. 12,19 | 6,6e-16 |
+  | C so với B | 12,53% | 10,72 .. 14,51 | 1,7e-16 |
+  | E so với D | 1,30% | 1,09 .. 1,50 | 1,2e-15 |
+
+  - **D không chậm hơn A ở 83,8% chuyến** → tiêu chí kế hoạch (≥ 80%, ≥ 5%) ĐẠT gộp.
+    - Theo ngày: đạt **12/14**. Hai ngày trượt đều là Chủ nhật: 01/11 78,9%, 08/11 79,2%.
+    - Theo khung giờ: đạt 18/20. Trượt 06:30 ngày thường (71,7%) và 06:30 cuối tuần (75,3%).
+    - Khắt khe (hẻm chậm hơn hồ sơ 30%): 10,4%, không chậm hơn 86,1%, đạt 14/14 ngày.
+  - Ngày thường D so với A 9,7–12,5%; cuối tuần 6,8–10,0% (Chủ nhật thấp nhất).
+  - Cùng 8 ngày cũ (30/10–06/11), đổi cách phạt làm D so với A từ 11,43% còn **10,58%**, không chậm hơn giữ 84,1%. Phạt mỗi cạnh từng thổi phồng thời gian của A, vì A đi vào đường đóng: 1.196 cạnh ở 461 chuyến trong 14 ngày.
+  - **Số chính để báo cáo từ nay: 10,4% (CI 8,6–12,2), 83,8%, trên 14 ngày, 12.600 chuyến.**
+- Các lượt có dự báo (QĐ-027) và lập trước (QĐ-028) vẫn chấm với phạt mỗi cạnh. So sánh nội bộ các lượt đó không đổi kết luận, vì mọi phương án cùng một thước đo.
+
+### 3. Thử D11 Kaggle 2020–21 (`mo_hinh/thu_kaggle.py`, log `ket_qua/thu_kaggle_2026-11-13.log`)
+
+- D11 quá thưa để làm hồ sơ hay tiền huấn luyện:
+  - 2.044/7.394 đoạn vàng có nhãn LOS;
+  - trung vị 4 mẫu mỗi đoạn trong 10 tháng;
+  - mỗi (đoạn, ô 30 phút) trung vị 1 mẫu;
+  - 22% dòng bị gắn cờ (COVID / Tết / nhập hàng loạt).
+- Thử cách duy nhất còn lại: 3 đặc trưng TĨNH mỗi đoạn (LOS TB, LOS TB giờ cao điểm, số mẫu), chỉ dòng sạch. 1.857 đoạn có, chiếm 20,9% dòng học và kiểm.
+- GBM + hồ sơ, cùng chia, cùng hạt:
+
+  | | 30 phút | 60 phút |
+  |---|---|---|
+  | toàn bộ | 6,162 → 6,162 (+0,00%) | 6,295 → 6,297 (+0,03%) |
+  | đoạn có Kaggle | 5,750 → 5,752 (+0,03%) | 5,875 → 5,879 (+0,07%) |
+
+  F1 kẹt không đổi.
+- **Kết luận: D11 không giúp dự báo.** Bỏ khỏi mô hình. Vẫn dùng được để SO SÁNH mức kẹt 2020–21 với 2026 trong phần khai phá, nếu cần.
+
+### 4. Dự báo "bây giờ" cho dữ liệu mới (`mo_hinh/du_bao_moi.py`, `he_thong/cap_nhat_du_lieu.sh`)
+
+- `BangHoc(het_hoc=...)`: mốc cắt CỐ ĐỊNH 08/11 16:15 (của lần train chính) thay cho 70%, nên phần học, hồ sơ và tình trạng chung không đổi khi có thêm dữ liệu. Mô hình GBM + hồ sơ lưu bằng joblib (`ket_qua/gbm_ls_hoc_toi_20261108_1615.joblib`, không lên git). Mọi dự báo sau mốc là NGOÀI MẪU.
+- `cap_nhat_du_lieu.sh` chạy 19:2x → 19:58:
+  - kéo S3 (profile chỉ đọc), dựng lại bạc + vàng (16 ngày, tới 13/11 19:30);
+  - 302/302 mục kiểm ĐẠT; pytest 67/67;
+  - `du_bao_moi.py` (3 mô hình × ~225 s) → `du_bao_gbm_ls_2026-11-13.parquet` (3,51 triệu ô, 08/11 17:30 → 13/11 19:30);
+  - hồ sơ API.
+- MAE ngoài mẫu ngày MỚI 13/11: 5,36 / 6,06 / 6,27, cùng mức các ngày 09–12/11.
+- Web: lúc 13/11 19:30 lớp dự báo cho 19:45–20:00 (tầm 30) và 20:15–20:30 (tầm 60), 5.716 đoạn. API đọc tệp dự báo mới nhất.
+- **Tự kiểm phát hiện LỖI RÒ RỈ** (xem mục 5): dự báo mới lệch dự báo cũ trên 35.386/2,9 triệu ô, chỉ từ 11/11 17:00 (lúc sự cố có lại); r giống hệt.
+
+### 5. Lỗi rò rỉ thông tin tương lai ở đặc trưng sự cố (TÌM 13/11 ~20:00, CHƯA SỬA)
+
+- `xu_ly/bac_su_co.py` gán mỗi sự cố vào cạnh theo hình học của lần ghi DÀI NHẤT trong suốt đời sự cố (`dai_nhat`, rồi `canh`). `xu_ly/vang.py` dùng tập cạnh đó cho MỌI khung có sự cố.
+- Hệ quả: hàng kẹt về sau dài ra thì ở khung trước đó, `su_co` / `tre_su_co_s` đã ghi trên những đoạn nó CHƯA tới. Thêm dữ liệu 13/11 làm hình "dài nhất" của các sự cố tối 12/11 đổi, nên đặc trưng khung cũ đổi theo (lệch dự báo tới 0,45 ở 12/11 21–22 giờ).
+- Ảnh hưởng tới số đã báo:
+  - GBM: không đáng kể. Ablation bỏ hẳn nhóm sự cố chỉ đổi MAE −0,002 / +0,002 / 0,000 (QĐ-026), nên rò rỉ không thể đã giúp GBM hơn chừng đó. Hồ sơ, tình trạng chung, r, nhãn không dính.
+  - Học sâu `--them-kenh` (kênh sự cố > 0 và log trễ): CHƯA biết. Phải sửa rồi train lại cùng mốc cắt để đo. Lợi thế tối Chủ nhật của "thêm kênh" (7,70 so với 8,73) cần kiểm lại.
+- Cách sửa: mỗi (khung, sự cố) dùng hình học CỦA ĐÚNG lần ghi đó (ghép riêng từng hình khác nhau); `vang.py` gán theo từng dòng. Sau đó:
+  1. dựng lại;
+  2. `du_bao_moi.py --hoc-lai` để so MAE theo ngày trước / sau;
+  3. thêm `--het-hoc` cho `hoc_sau_hcm.py`, train lại Graph WaveNet che sự cố cùng mốc 08/11 16:15, so theo ngày.
+
+## QĐ-030 — Thêm module "Trợ lý luật giao thông" dạng RAG đa nguồn, làm SAU khi xong train và chỉnh chu (13/11/2026)
+
+- **Nguồn quyết định:**
+  - Thầy hướng dẫn gợi ý RAG trong nhóm lớp TTTN (02/11; ví dụ của thầy: "vi phạm đi ngược chiều, xử phạt bao nhiêu? dựa vào văn bản pháp luật") và gửi chuỗi tutorial RAG Advanced #18–#26.
+  - Người dùng hỏi thầy, thầy trả lời: **"nếu được thì có thể làm vô"**.
+  - Người dùng chốt: ghi chi tiết trước, **khi nào train xong, làm chỉnh chu rồi mới bắt đầu**. Demo chỉ người dùng tự dùng, nên chi phí không cao.
+- **Thứ tự** (không đổi phần lõi):
+  1. xong phần train (QĐ-029);
+  2. chỉnh chu (API lên VPS có mật khẩu, web);
+  3. app Android (Figma rồi code);
+  4. module này;
+  5. các mở rộng khác trong `Y_TUONG.md`.
+- Tên đề tài GIỮ NGUYÊN (QĐ-019). Module là phần mở rộng, không thay phần dự báo / định tuyến.
+
+### Phạm vi chức năng
+
+Shipper hỏi bằng tiếng Việt trong app (và web demo). Một bộ phân luồng câu hỏi (intent router, như tutorial #25) chuyển câu hỏi tới đúng nguồn:
+
+| Luồng | Ví dụ | Nguồn |
+|---|---|---|
+| luật | "Xe máy đi ngược chiều phạt bao nhiêu? Có trừ điểm bằng không?" | Văn bản pháp luật (vector + từ khóa) |
+| dữ liệu | "Điện Biên Phủ giờ này kẹt không? 30 phút nữa?" | API của dự án: `/api/tinh-trang`, `/api/du-bao`, `/api/tuyen`, `/api/ngap` |
+| kết hợp | "Đi Bến Thành → Lăng Cha Cả có đoạn nào cấm xe máy / một chiều không? Lỡ đi vào thì phạt sao?" | Tuyến + luật cạnh của đồ thị (oneway, cấm xe máy) + văn bản luật |
+| ngoài phạm vi | "Tư vấn kiện tụng…" | Từ chối lịch sự, gợi ý hỏi cơ quan chức năng |
+
+### Dữ liệu luật (nguồn 1)
+
+- Chỉ lấy bản chính thức từ Cơ sở dữ liệu quốc gia về VBQPPL (vbpl.vn) hoặc Cổng TTĐT Chính phủ.
+- Văn bản dự kiến, PHẢI kiểm lại số hiệu và các văn bản sửa đổi mới nhất lúc làm (kiến thức có thể cũ):
+  - Luật Trật tự, an toàn giao thông đường bộ 2024;
+  - Luật Đường bộ 2024;
+  - nghị định xử phạt vi phạm hành chính giao thông đường bộ, trừ điểm giấy phép lái xe hiện hành (Nghị định 168/2024/NĐ-CP và văn bản sửa đổi nếu có);
+  - quy định cấm xe máy / giờ cấm của TP.HCM nếu tìm được.
+- Chia theo cấu trúc pháp lý (Chương → Điều → Khoản → Điểm), mỗi đoạn mang siêu dữ liệu: số hiệu văn bản, Điều / Khoản / Điểm, ngày hiệu lực, ngày hết hiệu lực / bị sửa bởi.
+- Theo tutorial #26:
+  - định danh văn bản + phiên bản;
+  - phát hiện thay đổi bằng hash nội dung (chuẩn hóa Unicode NFC);
+  - lọc theo thời điểm hiệu lực ("quy định nào áp dụng ngày X");
+  - không để đoạn của bản cũ lọt vào kết quả.
+  - Với vài văn bản thì một bảng manifest SQLite / PostgreSQL + dựng lại toàn bộ chỉ mục là đủ. KHÔNG cần RabbitMQ / OpenSearch như bản production của tutorial.
+- Văn bản QPPL không thuộc đối tượng bảo hộ quyền tác giả, nhưng vẫn ghi nguồn. Bản tải về để ở `du_lieu/` (không lên git), chỉ đưa lên git script tải và chia đoạn.
+
+### Truy xuất và trả lời
+
+- Tìm kiếm lai: BM25 (từ khóa: "ngược chiều", "Điều 7"…) + vector ngữ nghĩa, gộp bằng RRF (tutorial #18).
+- Kho vector tự chạy, miễn phí (vd Qdrant / Chroma / pgvector trong container riêng trên VPS, hoặc tệp cục bộ).
+- Luồng dữ liệu: mô hình GỌI CÔNG CỤ là các API sẵn có (tham số được kiểm), KHÔNG tự sinh SQL / mã, vì tutorial #25 cảnh báo exec / Text-to-SQL.
+- Câu trả lời:
+  - luôn trích văn bản / Điều / Khoản / ngày hiệu lực;
+  - kèm câu "chỉ để tham khảo, đối chiếu văn bản chính thức";
+  - không tìm đủ căn cứ thì nói "không tìm thấy", không đoán.
+- Hội thoại nhiều lượt (tutorial #24) để sau. Bản đầu mỗi câu hỏi độc lập.
+
+### Đánh giá (đo bằng số như phần còn lại của đề tài)
+
+- Bộ câu hỏi thử 60–100 câu, có đáp án và căn cứ (Điều / Khoản) kiểm tay: khoảng 50% luật, 30% dữ liệu, 20% kết hợp, vài câu ngoài phạm vi.
+- Đo:
+  - độ đúng phân luồng;
+  - tìm đúng điều luật trong top-k (recall@k);
+  - câu trả lời đúng mức phạt / đúng căn cứ;
+  - tỉ lệ từ chối đúng câu ngoài phạm vi;
+  - độ trễ;
+  - chi phí mỗi câu.
+- So: chỉ vector, chỉ BM25, lai.
+
+### Hạ tầng và chi phí
+
+- Gọi mô hình ngôn ngữ ở phía API (VPS), khóa API ở `.env` trên VPS, KHÔNG lên git. Người dùng tự đăng ký tài khoản / khóa; Claude không tạo tài khoản.
+- Lựa chọn mô hình:
+  - qua Amazon Bedrock: củng cố phần AWS của đề tài;
+  - hoặc API trực tiếp.
+  - Chọn mô hình nhỏ, rẻ cho phân luồng; mô hình tốt hơn cho câu trả lời luật. KIỂM GIÁ hiện hành trước khi chọn.
+- **Bẫy chi phí:**
+  - Bedrock Knowledge Bases mặc định có thể dùng kho vector TÍNH PHÍ THEO GIỜ (vd OpenSearch Serverless) dù không ai dùng. Ngân sách AWS đang đặt 2 USD (Budgets), nên phải kiểm trước.
+  - An toàn nhất: kho vector tự chạy + chỉ trả tiền mô hình theo lượt gọi.
+- Ước lượng: chỉ người dùng tự dùng, nên chủ yếu tốn lúc chạy bộ đánh giá (vài trăm lượt gọi). Tạo embedding cho vài văn bản là chi phí một lần. Con số cụ thể tính khi đã chọn mô hình và xem bảng giá.
+
+### Chưa làm, không làm
+
+- Video RAG: không, vì đã bỏ camera (QĐ-004).
+- Tư vấn pháp lý thật: không. Chỉ tra cứu kèm trích dẫn.

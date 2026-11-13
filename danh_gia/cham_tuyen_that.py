@@ -23,7 +23,9 @@ Bộ định tuyến chỉ biết những gì có tới lúc t:
                      của mọi bộ dự báo; G nằm giữa D (không dự báo) và H cho biết dự báo lấy được bao nhiêu phần
 Chấm: cho xe chạy lại trên tuyến: tới cạnh lúc τ thì tốc độ = v_trống × r ĐO THẬT ở lần chụp ứng với τ
 (khung 5 phút); cạnh không có số đo lúc đó dùng hồ sơ (ghi tỉ lệ chiều dài được chấm bằng số đo thật);
-đi vào cạnh đang ĐÓNG lúc τ: +300 s (phải quay đầu/đi vòng) và đếm lại.
+đi vào đoạn đang ĐÓNG lúc τ: +300 s mỗi LẦN GẶP (một dãy cạnh đóng liền nhau tính một lần — phải quay đầu / đi vòng
+một lần), QĐ-029; trước 13/11 tính mỗi CẠNH đóng (một dãy 10 cạnh = 50 phút, quá tay — QĐ-023), chạy lại bằng
+--phat-dong=canh. Cột vao_dong_* vẫn đếm số cạnh đóng.
 
 Tiêu chí kế hoạch (note/KE_HOACH.md mục 1): trên ≥ 30 cặp điểm, tuyến tối ưu không chậm hơn tuyến ngắn
 nhất ở ≥ 80% chuyến và nhanh hơn trung bình ≥ 5%.
@@ -62,6 +64,7 @@ from kiem_tra_tuan1 import DIA_DIEM  # noqa: E402
 
 GIO_XUAT_PHAT = ['06:30', '07:30', '08:30', '10:00', '12:00', '14:00', '15:30', '17:00', '18:00', '19:30']
 PHAT_DONG_S = 300.0
+PHAT_DONG_KIEU = 'lan'        # 'lan': mỗi lần gặp một dãy cạnh đóng liền nhau (QĐ-029); 'canh': mỗi cạnh (cũ)
 HE_SO_KHONG_DO = 1.0          # phép thử khắt khe: --khat-khe -> 0,7 (cạnh không có số đo chậm hơn hồ sơ 30%)
 HE_SO_KHAT_KHE = 0.7          # cột phut_kk_* tính sẵn mức này cho A–D trong mọi lần chạy
 SO_CAP_ZENODO = 90
@@ -182,25 +185,28 @@ def main():
         k = int(np.searchsorted(khung, np.datetime64(t), side='right')) - 1
         return k if 0 <= k < len(khung) and (t - khung[k]).total_seconds() < 600 else None
 
-    def buoc(i, t, k, hs=he_so):
+    phat_kieu = next((a.split('=', 1)[1] for a in sys.argv if a.startswith('--phat-dong=')), PHAT_DONG_KIEU)
+
+    def buoc(i, t, k, hs=he_so, truoc_dong=False):
         """Xe vào cạnh i lúc t (lần chụp k): (giây thật qua cạnh, mét chấm bằng số đo thật, 1 nếu cạnh đang đóng).
-        hs: hệ số nhân hồ sơ cho cạnh không có số đo."""
+        hs: hệ số nhân hồ sơ cho cạnh không có số đo. truoc_dong: cạnh liền trước cũng đang đóng (cùng một lần gặp)."""
         dong = int(DONG[k, i])
         r = R[k, i]
         do = dai[i] if r == r else 0.0
         if r != r:
             r = r_ho_so[t.hour, i] * hs
-        return dai[i] / (max(v_trong[i] * r, V_SAN) / 3.6) * (1 + PD[k, i]) + PHAT_DONG_S * dong, do, dong
+        phat = PHAT_DONG_S * dong if (phat_kieu == 'canh' or not truoc_dong) else 0.0
+        return dai[i] / (max(v_trong[i] * r, V_SAN) / 3.6) * (1 + PD[k, i]) + phat, do, dong
 
     def cham(canh, t0, hs=he_so):
         """Phút thật, tỉ lệ chiều dài chấm bằng số đo thật, số lần vào cạnh đóng. None nếu ra ngoài dữ liệu."""
-        tau, co_do, vao_dong = 0.0, 0.0, 0
+        tau, co_do, vao_dong, dong = 0.0, 0.0, 0, 0
         for i in canh:
             t = t0 + dt.timedelta(seconds=tau)
             k = lan_chup(t)
             if k is None:
                 return None
-            s, m, dong = buoc(i, t, k, hs)
+            s, m, dong = buoc(i, t, k, hs, dong > 0)
             tau, co_do, vao_dong = tau + s, co_do + m, vao_dong + dong
         return tau / 60, co_do / max(sum(dai[i] for i in canh), 1), vao_dong
 
@@ -216,7 +222,7 @@ def main():
         """
         for c in chuyen:
             c.update(vi_tri=0, tau=0.0, co_do=0.0, vao_dong=0, da_di=[], k_biet=k0, cho=None, xong=False,
-                     hong=False, so_tinh=0, so_doi=0, ket_dong=0)
+                     hong=False, so_tinh=0, so_doi=0, ket_dong=0, dong_truoc=0)
 
         def tien(c):
             while c['vi_tri'] < len(c['canh']):
@@ -229,7 +235,8 @@ def main():
                 if k > c['k_biet'] and c['da_di']:
                     c['cho'] = k
                     return
-                s, m, dong = buoc(i, t, k)
+                s, m, dong = buoc(i, t, k, he_so, c['dong_truoc'] > 0)
+                c['dong_truoc'] = dong
                 c['tau'] += s
                 c['co_do'] += m
                 c['vao_dong'] += dong
@@ -340,6 +347,7 @@ def main():
     hau_to = ('_zenodo' if dung_zenodo else '') + ('_khat_khe' if he_so != 1 else '') + \
         (f'_nguong{nguong:.0f}' if nguong != NGUONG_DOI_S else '') + \
         (f'_retrai{d.phat_re_trai_s:.0f}' if d.phat_re_trai_s != PHAT_RE_TRAI_S else '') + \
+        ('_phatcanh' if phat_kieu == 'canh' else '') + \
         (f'_dubao-{ten_du_bao}' + ('' if cach_du_bao == 'muc' else f'-{cach_du_bao}') if ten_du_bao else '')
     kq.to_csv(os.path.join(RA, f'cham_tuyen_{ngay}{hau_to}.csv'), index=False, encoding='utf-8-sig')
     print(f'he so canh khong co so do: {he_so}; nguong doi tuyen E: {nguong:.0f}s')

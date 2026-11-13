@@ -45,12 +45,15 @@ def chung_toan_mang(R, H):
 
 
 class BangHoc:
-    def __init__(self):
+    def __init__(self, het_hoc=None):
+        """het_hoc: mốc cắt CỐ ĐỊNH (khung học cuối) thay cho 70% khung đầu — để dự báo dữ liệu mới bằng mô hình đã train
+        mà phần học, hồ sơ, tình trạng chung không đổi theo lượng dữ liệu (du_bao_moi.py)."""
         d = pd.concat([pd.read_parquet(t) for t in sorted(glob.glob(os.path.join(VANG, '*.parquet')))],
                       ignore_index=True)
         self.d = d
         self.khung = np.sort(d['khung'].unique())
-        self.cat = int(len(self.khung) * TY_LE_HOC)
+        self.cat = (int(len(self.khung) * TY_LE_HOC) if het_hoc is None else
+                    int(np.searchsorted(self.khung, np.datetime64(pd.Timestamp(het_hoc)), side='right')))
         self.het_hoc = self.khung[self.cat - 1]
         self.dau_kiem = self.khung[min(self.cat + KHOANG_HO, len(self.khung) - 1)]
         self.kiem = d[d['khung'] >= self.dau_kiem]

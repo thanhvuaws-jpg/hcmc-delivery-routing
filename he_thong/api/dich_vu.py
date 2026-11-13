@@ -31,9 +31,24 @@ TEP_HO_SO = os.path.join(BAC, 'ho_so_api.npz')
 # TomTom nên không lên git; chưa có tệp thì API báo lỗi rõ ràng, các phần khác vẫn chạy.
 MAU_DU_BAO = os.path.join(GOC, 'mo_hinh', 'ket_qua', 'du_bao_gbm_ls_*.parquet')
 TAM_DU_BAO = (15, 30, 45, 60)
+# Hiệu chỉnh giờ đến (QĐ-029, danh_gia/hieu_chinh_gio_den.py): bộ định tuyến luôn HỨA SỚM vì chọn đúng những cạnh đang
+# được đoán nhanh hơn thật. Giờ đi dự kiến × hệ số theo giờ xuất phát, học trên 30/10–06/11 (phương án C, chuyến không vào
+# đường đóng), chấm trên 09–12/11: sai TB 0,77 -> 0,71 phút, lệch −0,48 -> −0,02 phút. Ngoài 06:30–19:30 chưa có số để học
+# -> không nhân. Học cho tuyến nhanh nhất, dùng chung cho cả 3 phương án.
+HE_SO_GIO_DEN = ((6.5, 1.0402), (7.5, 1.0279), (8.5, 1.0217), (10.0, 1.0166), (12.0, 1.0173), (14.0, 1.0137),
+                 (15.5, 1.0184), (17.0, 1.0462), (18.0, 1.0170), (19.5, 1.0036))
+
+
+def he_so_gio_den(luc):
+    """Hệ số nhân giờ đi dự kiến khi xuất phát lúc luc: nội suy theo giờ trong ngày; ngoài khoảng đã học = 1."""
+    t = pd.Timestamp(luc)
+    gio = t.hour + t.minute / 60
+    if not HE_SO_GIO_DEN[0][0] <= gio <= HE_SO_GIO_DEN[-1][0]:
+        return 1.0
+    return float(np.interp(gio, [g for g, _ in HE_SO_GIO_DEN], [k for _, k in HE_SO_GIO_DEN]))
 VUNG = (10.721, 106.607, 10.838, 106.748)       # nam, tây, bắc, đông — vùng 30 ô TomTom (thu_thap/tai_osm.py)
 V_SAN_KMH = 3.0
-PHAT_DONG_S = 300.0                             # như danh_gia/cham_tuyen_that.py
+PHAT_DONG_S = 300.0                             # như danh_gia/cham_tuyen_that.py: mỗi LẦN GẶP dãy cạnh đóng (QĐ-029)
 CUA_SO_THUC_TE = pd.Timedelta(hours=2)
 CACH_GIO_TOI_DA_S = 600                         # lần chụp cách quá 10 phút thì coi như không có dữ liệu
 PHUONG_AN = ('ngan_nhat', 'nhanh_nhat', 'toi_uu')
@@ -145,7 +160,7 @@ class DichVu:
         Hết số đo (quá lần chụp cuối) thì chạy tiếp bằng lần chụp cuối, đánh dấu NGUON_HET và het_du_lieu = True.
         """
         cac_khung, R, DONG, PD, vi_tri = bang
-        tau, co_do, vao_dong, het = 0.0, 0.0, 0, False
+        tau, co_do, vao_dong, het, dong = 0.0, 0.0, 0, False, 0
         giay, ra_r, nguon, dong_ra = [], [], [], []
         for i in canh:
             i = int(i)
@@ -154,6 +169,7 @@ class DichVu:
             con_so = k >= 0 and (t - pd.Timestamp(cac_khung[k])).total_seconds() < CACH_GIO_TOI_DA_S
             het = het or not con_so
             j = vi_tri[i]
+            truoc_dong = dong > 0
             r, dong, phan_dong = (R[k, j], int(DONG[k, j]), PD[k, j]) if k >= 0 else (np.nan, 0, 0.0)
             dai = self.d.dai[i]
             do_duoc = r == r
@@ -162,7 +178,7 @@ class DichVu:
             else:
                 r = self.r_ho_so[t.hour, i]
             vao_dong += dong
-            s = dai / (max(self.v_trong[i] * r, V_SAN_KMH) / 3.6) * (1 + phan_dong) + PHAT_DONG_S * dong
+            s = dai / (max(self.v_trong[i] * r, V_SAN_KMH) / 3.6) * (1 + phan_dong) + PHAT_DONG_S * dong * (not truoc_dong)
             tau += s
             giay.append(round(float(s), 2))
             ra_r.append(int(round(float(r) * 100)))
@@ -195,10 +211,11 @@ class DichVu:
         """Những gì bộ định tuyến ĐANG BIẾT (phải gọi _biet_luc trước): giây dự kiến từng cạnh cùng thước đo với
         tim(), r (%) từng cạnh. Giao diện chỉ dùng số này cho giờ đến và màu tuyến, không dùng số đo tương lai."""
         t0, dung_ht, _ = self.d._boi_canh(luc, 0.0, False)
+        he_so = he_so_gio_den(luc)                  # giây hiển thị đã hiệu chỉnh; thời gian tới cạnh sau vẫn theo tim()
         giay, t = [], 0.0
         for i in canh:
             s = self.d._bang(int((t0 + t) // 3600) % 24, dung_ht and t < 1800)[0][int(i)]
-            giay.append(round(s, 2))
+            giay.append(round(s * he_so, 2))
             t += s
         r = np.nan_to_num(self.d.mh.r_gio[luc.hour, canh], nan=1.0)
         return giay, (r * 100).round().astype(int).tolist()
@@ -264,9 +281,10 @@ class DichVu:
             return ra
 
     @staticmethod
-    def _gon(r):
-        """Bỏ các trường nội bộ, giữ những gì giao diện cần."""
-        return {'toa_do': [[round(a, 5), round(b, 5)] for a, b in r['toa_do']], 'canh': r['canh'], 'dai_m': r['dai_m'], 'phut': r['phut'],
+    def _gon(r, luc):
+        """Bỏ các trường nội bộ, giữ những gì giao diện cần. phut = dự kiến ĐÃ hiệu chỉnh (phut_goc: chưa hiệu chỉnh)."""
+        return {'toa_do': [[round(a, 5), round(b, 5)] for a, b in r['toa_do']], 'canh': r['canh'], 'dai_m': r['dai_m'],
+                'phut': round(r['phut'] * he_so_gio_den(luc), 1), 'phut_goc': r['phut'],
                 'so_canh_ket': r['so_canh_ket'], 'so_canh_ngap': r['so_canh_ngap'], 'so_canh_dong': r['so_canh_dong'],
                 'so_re_trai_lon': r['so_re_trai_lon'], 'ten_duong': r['ten_duong'], 'lech_di_m': r['lech_diem_di_m'],
                 'lech_den_m': r['lech_diem_den_m']}
@@ -286,7 +304,7 @@ class DichVu:
                 raise LoiYeuCau('Khong tim duoc duong giua hai diem nay (co the do duong dang dong).')
             bang = self._bang_thuc_te(kh, np.unique(np.concatenate([r['canh'] for r in co_tuyen])))
             for p in PHUONG_AN:
-                ra['phuong_an'][p] = None if kq[p] is None else {**self._gon(kq[p]), 'thuc_te': self._thuc_te(kq[p]['canh'], kh, bang)}
+                ra['phuong_an'][p] = None if kq[p] is None else {**self._gon(kq[p], kh), 'thuc_te': self._thuc_te(kq[p]['canh'], kh, bang)}
             return ra
 
     def tuyen_thay_the(self, di, den, luc=None, mua_mm=0.0, trieu_cuong=False):
@@ -299,7 +317,7 @@ class DichVu:
             if not ds:
                 raise LoiYeuCau('Khong tim duoc duong giua hai diem nay.')
             bang = self._bang_thuc_te(kh, np.unique(np.concatenate([r['canh'] for r in ds])))
-            return {'lan_chup': str(kh), 'tuyen': [{**self._gon(r), 'gian': r['gian'], 'trung': r['trung'],
+            return {'lan_chup': str(kh), 'tuyen': [{**self._gon(r, kh), 'gian': r['gian'], 'trung': r['trung'],
                                                     'thuc_te': self._thuc_te(r['canh'], kh, bang)} for r in ds]}
 
     # ── Lớp bản đồ ──
